@@ -1,0 +1,29 @@
+# Environment & secrets
+.env
+
+# Personal config (contains API keys)
+config/model_config.yaml
+config/global_config.yaml
+config/global_config2.yaml
+config/benchmarks/
+
+# Runtime output
+workspace/
+
+# Per-phase artifacts and journal — kept locally per machine
+# (PLAN.md: durable but gitignored, karpathy/autoresearch convention).
+# Anchored to repo root so the top-level results/ stays ignored without
+# capturing the source-tree `src/results/` package (R5).
+/results/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db

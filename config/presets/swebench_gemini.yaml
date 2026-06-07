@@ -1,0 +1,42 @@
+# SWE-bench Gemini configuration
+
+planner_model: google/gemini-3-flash-preview
+implementer_models: [google/gemini-3-flash-preview]
+implementer_model: google/gemini-3-flash-preview
+summarizer_model: google/gemini-3-flash-preview
+
+dataset_name: princeton-nlp/SWE-bench_Verified
+split: test
+# subset_seed: 42
+# subset_sizes: {validate: 20, test: 100}
+# subset_role: test
+
+max_steps: 50
+max_attempts: 6
+max_concurrency: 4
+docker_timeout: 300
+step_timeout: 120
+grading_timeout: 300
+task_max_wall_clock_seconds: 480
+grading_reserve_seconds: 120
+task_token_budget: 1000000
+
+n_solvers: 2
+solver_start_stagger_seconds: 0.0
+
+shared_lessons_enabled: true
+tried_admission_filter: true
+claims_enabled: false
+patch_summary_enabled: true
+patch_ready_checkpoint_enabled: false
+auto_submit_on_done_handoff: false
+shared_lessons_render_mode: full
+shared_lessons_planner_window_tokens: 2000
+shared_lessons_implementer_window_tokens: 1000
+note_verifier_mode: deterministic   # note hygiene: "deterministic" (rule-based, free) or "llm" (1 extra LLM call/step)
+
+prompt_cache_enabled: false
+prompt_cache_min_prefix_chars: 16000
+planner_max_tokens: 1200
+
+result_folder: workspace/logs/swebench_gemini

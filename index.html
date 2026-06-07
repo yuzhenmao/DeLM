@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DeLM — Decentralized Multi-Agent Systems with Shared Context</title>
+<script>document.documentElement.classList.add('js');</script><!-- content stays visible if JS is off -->
+
+<meta name="description" content="DeLM: a decentralized multi-agent framework where parallel agents coordinate through a shared, verified context and a task queue — no central controller." />
+
+<!-- Open Graph (edit url/image to your hosted domain) -->
+<meta property="og:title" content="Decentralized Multi-Agent Systems with Shared Context" />
+<meta property="og:description" content="DeLM decentralizes multi-agent coordination through parallel agents, a shared verified context, and a task queue." />
+<meta property="og:image" content="website/first.png" />
+<meta property="og:type" content="website" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+<style>
+  :root{
+    --bg:#ffffff;
+    --bg-soft:#f6f7f9;
+    --ink:#15181e;
+    --ink-2:#3c4250;
+    --ink-3:#727a87;
+    --line:#e7e9ee;
+    --line-strong:#d6dae1;
+
+    /* DeLM primary = the navy of the DeLM bars in the paper */
+    --primary:#1d3c63;
+    --primary-2:#2c5b94;
+
+    /* The three DeLM components, taken straight from the paper's figures */
+    --c-shared:#4a9d5b;   /* Shared Context (green)  */
+    --c-queue:#8b5fbf;    /* Task Queue (purple)     */
+    --c-agents:#5b8def;   /* Parallel Agents (blue)  */
+
+    --cardinal:#8c1515;   /* Stanford accent, used sparingly */
+
+    --maxw:1080px;
+    --read:760px;
+    --radius:16px;
+    --shadow:0 1px 2px rgba(16,24,40,.04), 0 12px 32px -16px rgba(16,24,40,.16);
+    --shadow-sm:0 1px 2px rgba(16,24,40,.05), 0 6px 16px -10px rgba(16,24,40,.18);
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink-2);
+    font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    font-size:17px;
+    line-height:1.7;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  h1,h2,h3{font-family:"Space Grotesk",Inter,sans-serif;color:var(--ink);margin:0;}
+  a{color:var(--primary-2);text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  img{max-width:100%;display:block;}
+
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px;}
+
+  /* ---------- tricolor signature (the three DeLM components) ---------- */
+  .tricolor{display:inline-flex;gap:5px;align-items:center;}
+  .tricolor span{display:block;height:4px;width:34px;border-radius:99px;}
+  .tricolor span:nth-child(1){background:var(--c-shared);}
+  .tricolor span:nth-child(2){background:var(--c-queue);}
+  .tricolor span:nth-child(3){background:var(--c-agents);}
+  .dots{display:inline-flex;gap:4px;margin-left:8px;vertical-align:middle;}
+  .dots i{width:7px;height:7px;border-radius:50%;display:block;}
+  .dots i:nth-child(1){background:var(--c-shared);}
+  .dots i:nth-child(2){background:var(--c-queue);}
+  .dots i:nth-child(3){background:var(--c-agents);}
+
+  /* ---------- nav ---------- */
+  .nav{
+    position:sticky;top:0;z-index:50;
+    background:rgba(255,255,255,.82);
+    backdrop-filter:saturate(180%) blur(12px);
+    -webkit-backdrop-filter:saturate(180%) blur(12px);
+    border-bottom:1px solid var(--line);
+  }
+  .nav-inner{max-width:var(--maxw);margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+  .brand{display:inline-flex;align-items:center;font-family:"Space Grotesk";font-weight:700;font-size:1.2rem;color:var(--ink);letter-spacing:-.01em;}
+  .brand:hover{text-decoration:none;}
+  .nav-links{display:flex;align-items:center;gap:22px;}
+  .nav-links a{color:var(--ink-2);font-weight:500;font-size:.96rem;display:inline-flex;align-items:center;gap:7px;}
+  .nav-links a:hover{color:var(--primary);text-decoration:none;}
+  .icon-btn{display:inline-flex;align-items:center;justify-content:center;color:var(--ink-2);}
+  .icon-btn svg{width:22px;height:22px;}
+  .icon-btn:hover{color:var(--primary);}
+
+  /* ---------- hero ---------- */
+  .hero{padding:clamp(56px,9vw,104px) 0 clamp(40px,6vw,60px);text-align:center;}
+  .hero .wrap{max-width:1320px;}            /* extra room so the title sits on one line */
+  .eyebrow{
+    font-family:"JetBrains Mono",monospace;font-size:.78rem;font-weight:500;
+    letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);
+  }
+  .hero h1{
+    font-size:clamp(1.4rem,3.3vw,2.85rem);font-weight:700;line-height:1.08;letter-spacing:-.025em;
+    margin:18px auto 0;white-space:nowrap;                 /* one line on desktop */
+  }
+  .hero .lede{
+    font-size:clamp(1.08rem,2.1vw,1.32rem);color:var(--ink-2);line-height:1.55;
+    max-width:820px;margin:18px auto 0;
+  }
+  .authors{margin:24px auto 0;font-size:1.05rem;color:var(--ink);font-weight:500;}
+  .authors a{color:var(--ink);}
+  .affil{margin-top:6px;color:var(--ink-3);font-size:.95rem;}
+  .affil .mono{font-family:"JetBrains Mono",monospace;font-size:.85rem;}
+
+  /* compact icon links to paper + code (replaces the big buttons) */
+  .links{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:28px;}
+  .link-pill{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:"Inter";font-weight:600;font-size:.98rem;color:var(--ink);background:#fff;
+    border:1px solid var(--line-strong);border-radius:999px;padding:.5em 1.1em;cursor:pointer;
+    transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease, color .15s ease;
+  }
+  .link-pill svg{width:17px;height:17px;}
+  .link-pill:hover{border-color:var(--primary);color:var(--primary);transform:translateY(-2px);box-shadow:var(--shadow-sm);text-decoration:none;}
+
+  /* one-line takeaway under the video */
+  .takeaway{
+    max-width:1000px;margin:26px auto 0;text-align:center;
+    font-size:1.02rem;line-height:1.6;color:var(--ink-2);
+  }
+  .takeaway .tk{
+    font-family:"JetBrains Mono",monospace;font-size:.7rem;font-weight:500;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--primary);
+    background:rgba(29,60,99,.08);border-radius:6px;padding:3px 9px;margin-right:10px;
+    white-space:nowrap;vertical-align:middle;
+  }
+  .takeaway strong{color:var(--ink);font-weight:700;}
+
+  .hero .tricolor{margin-top:42px;}
+
+  /* ---------- sections ---------- */
+  .section{padding:clamp(54px,8vw,96px) 0;border-top:1px solid var(--line);}
+  .section-head{margin-bottom:30px;}
+  .section-head .eyebrow{display:block;}
+  .section-head h2{font-size:clamp(1.5rem,3vw,2.05rem);font-weight:600;letter-spacing:-.02em;margin-top:10px;}
+
+  /* video */
+  .video-wrap{
+    position:relative;
+    width:100%;
+    border-radius:var(--radius);
+    overflow:hidden;
+    border:1px solid var(--line);
+    box-shadow:var(--shadow);
+    background:#0e1726;
+    line-height:0;          /* 顺手消除行内元素底部的缝隙 */
+  }
+  .video-wrap video{
+    width:100%;
+    height:auto;            /* 高度交给视频自己,黑边消失 */
+    display:block;
+  }
+  /* placeholder shown until you drop in a video — remove this block once you do */
+  .video-ph{
+    position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+    color:#fff;text-align:center;padding:24px;
+    background:
+      radial-gradient(120% 120% at 18% 12%, rgba(91,141,239,.42), transparent 55%),
+      radial-gradient(120% 120% at 85% 22%, rgba(139,95,191,.40), transparent 55%),
+      radial-gradient(140% 140% at 50% 110%, rgba(74,157,91,.40), transparent 60%),
+      linear-gradient(135deg,#11203a,#0c1424);
+  }
+  .play{
+    width:76px;height:76px;border-radius:50%;display:grid;place-items:center;
+    background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.55);
+    backdrop-filter:blur(4px);transition:transform .2s ease, background .2s ease;
+  }
+  .video-wrap:hover .play{transform:scale(1.06);background:rgba(255,255,255,.2);}
+  .play svg{width:30px;height:30px;margin-left:4px;fill:#fff;}
+  .video-ph .ph-title{font-family:"Space Grotesk";font-weight:600;font-size:1.15rem;letter-spacing:.01em;}
+  .video-ph .ph-sub{font-size:.92rem;color:rgba(255,255,255,.7);max-width:46ch;line-height:1.5;}
+
+  /* figure */
+  .figure-card{
+    border:1px solid var(--line);border-radius:var(--radius);background:#fff;
+    padding:clamp(16px,3.5vw,40px);box-shadow:var(--shadow);
+  }
+  .figure-card img{margin:0 auto;}
+  .figure-cap{max-width:880px;margin:24px auto 0;font-size:.95rem;color:var(--ink-3);line-height:1.6;text-align:center;}
+  .figure-cap b{color:var(--ink-2);}
+  .idea-text{max-width:760px;margin:0 auto;font-size:1.08rem;line-height:1.78;color:var(--ink-2);}
+
+  /* abstract — centered column */
+  .section--abstract{text-align:center;}
+  .abstract-body{max-width:var(--read);margin-left:auto;margin-right:auto;text-align:left;}
+  .abstract-body p{margin:0;font-size:1.08rem;line-height:1.78;color:var(--ink-2);}
+  .abstract-body .lead-letter{} /* hook if you want a drop cap later */
+
+  /* citation */
+  .section--cite{background:var(--bg-soft);}
+  .cite-card{position:relative;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line-strong);box-shadow:var(--shadow);}
+  .cite-bar{display:flex;align-items:center;justify-content:space-between;background:#eef2f7;color:var(--ink-3);padding:11px 16px;font-family:"JetBrains Mono",monospace;font-size:.8rem;letter-spacing:.03em;border-bottom:1px solid var(--line);}
+  .cite-bar .label{display:inline-flex;align-items:center;gap:9px;}
+  .cite-bar .label .dotrow{display:inline-flex;gap:5px;}
+  .cite-bar .label .dotrow i{width:9px;height:9px;border-radius:50%;display:block;}
+  .cite-bar .label .dotrow i:nth-child(1){background:var(--c-shared);}
+  .cite-bar .label .dotrow i:nth-child(2){background:var(--c-queue);}
+  .cite-bar .label .dotrow i:nth-child(3){background:var(--c-agents);}
+  .copy-btn{
+    background:#fff;border:1px solid var(--line-strong);color:var(--ink-2);border-radius:8px;
+    padding:6px 13px;font-family:"JetBrains Mono",monospace;font-size:.78rem;cursor:pointer;
+    display:inline-flex;align-items:center;gap:7px;transition:all .15s ease;
+  }
+  .copy-btn:hover{border-color:var(--primary);color:var(--primary);}
+  .copy-btn.copied{border-color:var(--c-shared);color:#2f7d4f;}
+  .copy-btn svg{width:14px;height:14px;}
+  pre.bibtex{
+    margin:0;background:#fff;color:var(--ink-2);padding:22px 18px;overflow-x:auto;
+    font-family:"JetBrains Mono",monospace;font-size:.86rem;line-height:1.65;
+  }
+  pre.bibtex .k{color:#2c5b94;}     /* keys (blue)    */
+  pre.bibtex .t{color:#7341a3;}     /* type (purple)  */
+  pre.bibtex .v{color:#2f7d4f;}     /* values (green) */
+
+  /* footer */
+  .footer{border-top:1px solid var(--line);padding:48px 0 0;text-align:center;}
+  .footer .inst{font-family:"Space Grotesk";font-weight:600;color:var(--ink);font-size:1.05rem;}
+  .footer .flinks{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px 22px;justify-content:center;color:var(--ink-2);}
+  .footer .flinks a{color:var(--ink-2);font-weight:500;}
+  .footer .flinks a:hover{color:var(--primary);}
+  .footer .copy{margin-top:18px;color:var(--ink-3);font-size:.85rem;}
+  .footer-rule{margin-top:34px;height:4px;display:flex;}
+  .footer-rule span{flex:1;}
+  .footer-rule span:nth-child(1){background:var(--c-shared);}
+  .footer-rule span:nth-child(2){background:var(--c-queue);}
+  .footer-rule span:nth-child(3){background:var(--c-agents);}
+
+  /* ---------- reveal on scroll (only when JS is active) ---------- */
+  .js .reveal{opacity:0;transform:translateY(16px);transition:opacity .6s ease, transform .6s ease;}
+  .js .reveal.is-in{opacity:1;transform:none;}
+
+  @media (max-width:760px){
+    /* title is one line on desktop; let it wrap (and shrink) on small screens */
+    .hero h1{white-space:normal;font-size:clamp(1.85rem,7vw,2.45rem);max-width:18ch;margin-left:auto;margin-right:auto;}
+  }
+
+  @media (max-width:640px){
+    body{font-size:16px;}
+    .nav-links{gap:16px;}
+    .nav-links .paper-text{display:none;} /* keep icons tidy on small screens */
+    .links{gap:10px;}
+    .takeaway .tk{display:inline-block;margin-bottom:6px;}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto;}
+    .js .reveal{opacity:1;transform:none;transition:none;}
+    .link-pill,.play{transition:none;}
+  }
+  :focus-visible{outline:2.5px solid var(--primary-2);outline-offset:3px;border-radius:6px;}
+</style>
+</head>
+<body>
+
+<!-- ============================= NAV ============================= -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top">DeLM</a>
+    <div class="nav-links">
+      <a href="https://arxiv.org/abs/2606.10662" class="paper-link" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        <span class="paper-text">Paper</span>
+      </a>
+      <a class="icon-btn" href="https://github.com/yuzhenmao/DeLM" target="_blank" rel="noopener" aria-label="GitHub repository" title="GitHub">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-1.9c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0C17 5.6 18 5.9 18 5.9c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.5 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<a id="top"></a>
+
+<!-- ============================= HERO ============================= -->
+<header class="hero">
+  <div class="wrap">
+    <h1>Decentralized Multi-Agent Systems with Shared Context</h1>
+    <p class="lede">Introducing a shared-context multi-agent framework (DeLM) that turns parallel execution into verified, reusable progress, supporting scalable, reliable, and self-coordinating test-time reasoning.</p>
+
+    <div class="links">
+      <a href="https://arxiv.org/abs/2606.10662" class="link-pill" aria-label="Read the paper" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Paper
+      </a>
+      <a href="https://github.com/yuzhenmao/DeLM" target="_blank" rel="noopener" class="link-pill" aria-label="View code on GitHub">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-1.9c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0C17 5.6 18 5.9 18 5.9c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.5 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+        Code
+      </a>
+    </div>
+
+  </div>
+</header>
+
+<!-- ============================= VIDEO ============================= -->
+<section class="section">
+  <div class="wrap reveal">
+    <!--
+      ▶ ADD YOUR VIDEO HERE — pick ONE option, then delete the .video-ph placeholder below.
+
+      OPTION A · local file (drop video.mp4 next to this page, e.g. in a /videos folder):
+        <video controls poster="images/figure3_delm_overview.png" preload="metadata">
+          <source src="video.mp4" type="video/mp4" />
+        </video>
+
+      OPTION B · YouTube embed (swap VIDEO_ID for your id):
+        <iframe src="https://www.youtube.com/embed/VIDEO_ID" title="DeLM overview"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen></iframe>
+    -->
+    <div class="video-wrap">
+      <video controls poster="website/first.png" preload="metadata">
+        <source src="website/delm-decentralized-vs-centralized.mp4" type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= MAIN FIGURE ============================= -->
+<section class="section">
+  <div class="wrap reveal">
+    <div class="section-head">
+      <span class="eyebrow">The idea</span>
+      <h2>From a central controller to shared state</h2>
+    </div>
+
+    <figure class="figure-card" style="margin:0 0 28px;">
+      <img src="website/first.png"
+           alt="Centralized multi-agent systems route every subtask and result through one main agent, creating a bottleneck. DeLM coordinates through parallel agents, a shared verified context, and a task queue." />
+    </figure>
+
+    <p class="idea-text">
+      Unlike centralized multi-agent systems, which rely on a central controller and synchronous scatter–gather coordination, DeLM lets agents coordinate asynchronously through a shared, verified context. Agents claim tasks from a queue and write back compact, verified results as they finish, making progress visible to all workers without requiring a main agent to merge, filter, and rebroadcast it.
+    </p>
+  </div>
+</section>
+
+<!-- ============================= ABSTRACT ============================= -->
+<section class="section section--abstract">
+  <div class="wrap reveal">
+    <div class="section-head">
+      <span class="eyebrow">Abstract</span>
+    </div>
+    <div class="abstract-body">
+      <p>
+        Multi-agent systems (MAS) can scale large language model reasoning at test time by decomposing complex problems into parallel subtasks. However, most existing MAS rely on centralized orchestration, where a main agent assigns work, collects outputs, and merges results. As the number of subtasks grows, this controller becomes a communication and integration bottleneck. We propose <b>Decentralized Language Models (DeLM)</b>, a MAS framework that decentralizes coordination through parallel agents, a shared verified context, and a task queue. Agents asynchronously claim subtasks, read accumulated progress, perform local reasoning, and write back compact verified updates. The shared context acts as a common communication substrate, enabling agents to build on one another's verified progress without routing every update through a central controller. Empirically, DeLM improves both software-engineering test-time scaling and long-context reasoning. On SWE-bench Verified, DeLM achieves the best performance across Avg.@1, Pass@2, and Pass@4, with gains of up to 10.5 percentage points over the strongest baseline, while reducing cost per task by roughly 50%. On LongBench-v2 Multi-Doc QA, DeLM achieves the highest average accuracy across four frontier model families, improving over the strongest baseline by up to 5.7 percentage points.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= CITATION ============================= -->
+<section class="section section--cite">
+  <div class="wrap reveal">
+    <div class="section-head">
+      <span class="eyebrow">Cite this work</span>
+      <h2>BibTeX</h2>
+    </div>
+
+    <div class="cite-card">
+      <div class="cite-bar">
+        <span class="label"><span class="dotrow"><i></i><i></i><i></i></span> citation.bib</span>
+        <button class="copy-btn" id="copyBtn" type="button" aria-label="Copy BibTeX to clipboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span id="copyLabel">Copy</span>
+        </button>
+      </div>
+<pre class="bibtex" id="bibtex"><span class="t">@misc</span>{<span class="k">mao2026delm</span>,
+      <span class="k">title</span>={<span class="v">Decentralized Multi-Agent Systems with Shared Context</span>}, 
+      <span class="k">author</span>={<span class="v">Yuzhen Mao and Azalia Mirhoseini</span>},
+      <span class="k">year</span>={<span class="v">2026</span>},
+      <span class="k">eprint</span>={<span class="v">2606.10662</span>},
+      <span class="k">archivePrefix</span>={<span class="v">arXiv</span>},
+      <span class="k">primaryClass</span>={<span class="v">cs.MA</span>},
+      <span class="k">url</span>={<span class="v">https://arxiv.org/abs/2606.10662</span>}, 
+}</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= FOOTER ============================= -->
+<footer class="footer">
+  <div class="wrap">
+    <div class="flinks">
+      <a href="https://arxiv.org/abs/2606.10662" target="_blank" rel="noopener">Paper</a>
+      <a href="https://github.com/yuzhenmao/DeLM" target="_blank" rel="noopener">Code</a>
+      <a href="#" id="footBib">BibTeX</a>
+    </div>
+  </div>
+  <div class="footer-rule" aria-hidden="true"><span></span><span></span><span></span></div>
+</footer>
+
+<script>
+  // ----- copy BibTeX -----
+  (function(){
+    const btn = document.getElementById('copyBtn');
+    const label = document.getElementById('copyLabel');
+    const pre = document.getElementById('bibtex');
+    function doCopy(){
+      const text = pre.innerText;
+      const done = () => {
+        btn.classList.add('copied');
+        label.textContent = 'Copied!';
+        setTimeout(() => { btn.classList.remove('copied'); label.textContent = 'Copy'; }, 1800);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(done).catch(fallback);
+      } else { fallback(); }
+      function fallback(){
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch(e){}
+        document.body.removeChild(ta);
+      }
+    }
+    btn.addEventListener('click', doCopy);
+    document.getElementById('footBib').addEventListener('click', function(e){
+      e.preventDefault();
+      document.querySelector('.section--cite').scrollIntoView({behavior:'smooth'});
+      doCopy();
+    });
+  })();
+
+  // ----- reveal on scroll (respects reduced motion) -----
+  (function(){
+    const els = document.querySelectorAll('.reveal');
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || !('IntersectionObserver' in window)){
+      els.forEach(el => el.classList.add('is-in')); return;
+    }
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(en => { if (en.isIntersecting){ en.target.classList.add('is-in'); io.unobserve(en.target); } });
+    }, {threshold:.12, rootMargin:'0px 0px -8% 0px'});
+    els.forEach(el => io.observe(el));
+  })();
+</script>
+</body>
+</html>
