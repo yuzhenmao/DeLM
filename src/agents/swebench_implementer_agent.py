@@ -15,8 +15,10 @@ from src.prompts.swebench_local import (  # noqa: F401 (re-exported for backward
     SHARED_LESSONS_GUIDANCE,
     SWEBENCH_IMPLEMENTER_PROMPT,
     build_implementer_prompt,
+    build_implementer_prompt_step_refresh,
 )
 from src.shared_lessons import VALID_TYPES as LESSON_TYPES, parse_note_body
+from src.step_refresh import BOARD_UPDATE_SYSTEM_PARAGRAPH, DeltaLedger
 
 PATCH_CLEAN_DELAY_STEPS = 8
 _PEER_PATCH_LINE_RE = re.compile(
@@ -248,6 +250,13 @@ class SWEBenchImplementerAgent(BaseAgent):
     prompt_cache_static_layout: bool = Field(default=False)
     prompt_cache_min_prefix_chars: int = Field(default=16000)
     shared_lessons_block: str = Field(default="")
+
+    # Board refresh mode: "legacy_full" (per-step windowed re-render, default),
+    # "dispatch_only" (frozen dispatch snapshot), or "every_step" (frozen
+    # snapshot plus tail-appended delta ledger). See src/step_refresh.py.
+    refresh_mode: str = Field(default="legacy_full")
+    dispatch_board_block: Optional[str] = Field(default=None)
+    delta_ledger: Optional[Any] = Field(default=None)
     
     class Config:
         arbitrary_types_allowed = True
@@ -319,7 +328,43 @@ class SWEBenchImplementerAgent(BaseAgent):
 
         obs_str = truncate_middle(obs_str, 16000)
 
-        if self.shared_lessons is not None:
+        if (
+            self.refresh_mode in ("dispatch_only", "every_step")
+            and self.shared_lessons is not None
+        ):
+            try:
+                if self.dispatch_board_block is None:
+                    # High-water mark first, then render: an entry admitted in
+                    # between may show in both snapshot and ledger (benign);
+                    # the reverse order could skip entries entirely. The large
+                    # index reads the board length without copying entries.
+                    n0, _ = await self.shared_lessons.entries_since(1 << 30)
+                    self.dispatch_board_block = await self.shared_lessons.render(
+                        window_tokens=self.shared_lessons_window_tokens,
+                        viewer_thread_id=self.thread_id,
+                        viewer_delegation_id=self.delegation_id,
+                        self_policy="demote_current",
+                    )
+                    self.delta_ledger = DeltaLedger(
+                        task_id=self.shared_lessons.task_id,
+                        thread_id=self.thread_id,
+                        delegation_id=self.delegation_id,
+                        dispatch_hwm=n0,
+                        board_start_time=self.shared_lessons.start_time,
+                    )
+                if self.refresh_mode == "every_step" and self.delta_ledger is not None:
+                    n, new_entries = await self.shared_lessons.entries_since(
+                        self.delta_ledger.hwm
+                    )
+                    if new_entries:
+                        self.delta_ledger.absorb(n, new_entries, arrival_step=current_step)
+            except Exception as e:
+                logger.warning(
+                    f"[SWEBenchImplementerAgent] board refresh read failed: {e}"
+                )
+                if self.dispatch_board_block is None:
+                    self.dispatch_board_block = ""
+        elif self.shared_lessons is not None:
             try:
                 if self.shared_lessons_render_mode == "patch_selective_unfold":
                     self.shared_lessons_block = await self.shared_lessons.render_patch_selective_unfold()
@@ -398,28 +443,53 @@ class SWEBenchImplementerAgent(BaseAgent):
             except Exception:
                 strategy_prefix = ""
 
-        prompt = build_implementer_prompt(
-            task_instruction=self.current_instruction,
-            context=self.context,
-            command_docs=self.command_docs,
-            state_info=self.state_info,
-            memory=self._get_memory(),
-            observation=obs_str,
-            current_step=current_step,
-            max_steps=max_steps,
-            shared_lessons_block=self.shared_lessons_block,
-            thread_id=self.thread_id,
-            cache_static_prefix_layout=self.prompt_cache_static_layout,
-            cache_static_prefix_min_chars=self.prompt_cache_min_prefix_chars,
-            implementer_fast_finish_prompt_enabled=self.implementer_fast_finish_prompt_enabled,
-            peer_patch_protocol_enabled=self.peer_patch_protocol_enabled,
-            patch_summary_timing_rule_enabled=self.patch_summary_timing_rule_enabled,
-            strategy_prefix=strategy_prefix,
-        )
+        if self.refresh_mode in ("dispatch_only", "every_step"):
+            board_update_section = (
+                self.delta_ledger.render_section()
+                if (self.refresh_mode == "every_step" and self.delta_ledger is not None)
+                else ""
+            )
+            prompt = build_implementer_prompt_step_refresh(
+                task_instruction=self.current_instruction,
+                context=self.context,
+                command_docs=self.command_docs,
+                state_info=self.state_info,
+                memory=self._get_memory(),
+                observation=obs_str,
+                current_step=current_step,
+                max_steps=max_steps,
+                dispatch_board_block=self.dispatch_board_block or "",
+                board_update_section=board_update_section,
+                thread_id=self.thread_id,
+                board_updates_enabled=(self.refresh_mode == "every_step"),
+                board_update_paragraph=BOARD_UPDATE_SYSTEM_PARAGRAPH,
+                peer_patch_protocol_enabled=self.peer_patch_protocol_enabled,
+                patch_summary_timing_rule_enabled=self.patch_summary_timing_rule_enabled,
+                strategy_prefix=strategy_prefix,
+            )
+        else:
+            prompt = build_implementer_prompt(
+                task_instruction=self.current_instruction,
+                context=self.context,
+                command_docs=self.command_docs,
+                state_info=self.state_info,
+                memory=self._get_memory(),
+                observation=obs_str,
+                current_step=current_step,
+                max_steps=max_steps,
+                shared_lessons_block=self.shared_lessons_block,
+                thread_id=self.thread_id,
+                cache_static_prefix_layout=self.prompt_cache_static_layout,
+                cache_static_prefix_min_chars=self.prompt_cache_min_prefix_chars,
+                implementer_fast_finish_prompt_enabled=self.implementer_fast_finish_prompt_enabled,
+                peer_patch_protocol_enabled=self.peer_patch_protocol_enabled,
+                patch_summary_timing_rule_enabled=self.patch_summary_timing_rule_enabled,
+                strategy_prefix=strategy_prefix,
+            )
         self._profile_prompt(prompt, current_step)  # env-gated (SL_PROMPT_PROFILE); no-op otherwise
 
         logger.log_to_file(LogLevel.INFO, f"[SWEBenchImplementerAgent] Step {current_step} Input:\n{prompt}\n")
-        
+
         try:
             resp = await self.llm(prompt)
         except Exception as e:

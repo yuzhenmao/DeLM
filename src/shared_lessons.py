@@ -971,6 +971,23 @@ class SharedLessons:
         async with self._lock:
             return list(self._entries)
 
+    async def entries_since(self, k: int) -> Tuple[int, List[Dict[str, Any]]]:
+        """Read-only: (current length, copies of entries[k:]).
+
+        Index-stable only while the board is append-only, which holds with
+        patch_summary_latest_wins_enabled=False; the in-place PATCH_SUMMARY
+        replacement path is the sole mutation of existing indices.
+        Used by the every_step refresh mode's delta ledger.
+        """
+        k = max(0, int(k))
+        async with self._lock:
+            n = len(self._entries)
+            return n, [dict(e) for e in self._entries[k:]]
+
+    @property
+    def start_time(self) -> float:
+        return self._start_time
+
     async def get_stats(self, window_tokens: Optional[int] = None) -> Dict[str, Any]:
         """Return storage stats, optionally including current render-selection stats."""
         async with self._lock:

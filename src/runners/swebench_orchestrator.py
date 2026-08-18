@@ -330,6 +330,7 @@ class SWEBenchOrchestra(Benchmark):
                     wall_clock_deadline_perf=wall_clock_deadline_perf,
                     grading_reserve_seconds=getattr(self.config, "grading_reserve_seconds", 120),
                     note_verifier_mode=getattr(self.config, "note_verifier_mode", "deterministic"),
+                    refresh_mode=getattr(self.config, "refresh", "legacy_full"),
                 )
                 return await runner.run(None, env)
             except asyncio.CancelledError:

@@ -66,7 +66,9 @@ class SWEBenchRunner(Runner):
         implementer_strategy_prompt_enabled: bool = False,
         prompt_cache_enabled: bool = False,
         prompt_cache_min_prefix_chars: int = 16000,
+        refresh_mode: str = "legacy_full",
     ):
+        self.refresh_mode = str(refresh_mode or "legacy_full").lower()
         self.planner_model = planner_model
         self.implementer_models = implementer_models
         self.step_timeout = step_timeout
@@ -171,6 +173,7 @@ class SWEBenchRunner(Runner):
             implementer_strategy_prompt_enabled=self.implementer_strategy_prompt_enabled,
             prompt_cache_enabled=self.prompt_cache_enabled,
             prompt_cache_min_prefix_chars=self.prompt_cache_min_prefix_chars,
+            refresh_mode=self.refresh_mode,
         )
         submit = SubmitTool(env=env)
 
