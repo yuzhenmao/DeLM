@@ -90,6 +90,13 @@ class SWEBenchOrchestraConfig:
     prompt_cache_enabled: bool = False
     prompt_cache_min_prefix_chars: int = 16000
 
+    # How the implementer sees the shared board (prompt assembly only):
+    # "legacy_full"   windowed re-render every step (default, unchanged)
+    # "dispatch_only" board rendered once at delegation start, then frozen
+    # "every_step"    frozen dispatch snapshot plus an append-only
+    #                 [BOARD UPDATE] section of entries admitted since
+    refresh: str = "legacy_full"
+
     # Output
     result_folder: Path = field(default_factory=lambda: Path("workspace/logs"))
     trajectory_dir: Optional[Path] = None
@@ -127,6 +134,19 @@ class SWEBenchOrchestraConfig:
                 f"note_verifier_mode={self.note_verifier_mode!r} is not "
                 "'deterministic' or 'llm'; the runner falls back to deterministic."
             )
+        if self.refresh not in ("legacy_full", "dispatch_only", "every_step"):
+            self._warn(
+                f"refresh={self.refresh!r} unknown; falling back to legacy_full."
+            )
+            self.refresh = "legacy_full"
+        if self.refresh == "every_step" and self.patch_summary_latest_wins_enabled:
+            self._warn(
+                "refresh=every_step requires an append-only board; "
+                "patch_summary_latest_wins_enabled=True replaces entries in "
+                "place and can make the delta ledger skip or repeat entries. "
+                "Disabling patch_summary_latest_wins_enabled."
+            )
+            self.patch_summary_latest_wins_enabled = False
 
     @staticmethod
     def _warn(msg: str) -> None:
@@ -239,6 +259,7 @@ class SWEBenchOrchestraConfig:
             ),
             prompt_cache_enabled=bool(raw.get("prompt_cache_enabled", False)),
             prompt_cache_min_prefix_chars=int(raw.get("prompt_cache_min_prefix_chars", 16000)),
+            refresh=str(raw.get("refresh", "legacy_full")).lower(),
             result_folder=result_folder,
             trajectory_dir=trajectory_dir,
             csv_summary_path=csv_summary_path,

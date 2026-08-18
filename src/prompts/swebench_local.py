@@ -194,6 +194,174 @@ PEER_PATCH_PROTOCOL = """Peer PATCH_SUMMARY protocol:
 - Prefer summaries marked final/verified with fewer local_failures; treat high local_failures or high risk as a warning to inspect the failure mode before adopting it.
 - If you reject or refine it, publish the reason as FAIL or PATCH_SUMMARY.evidence/risk so the next peer does not repeat the same partial patch."""
 
+# =============================================================================
+# Template for the dispatch_only and every_step refresh modes.
+#
+# Derived from the cache-static template, with two changes:
+#   * the shared-lessons block is the frozen dispatch-time render and lives in
+#     the static prefix, so it is constant within a delegation
+#   * `{board_update_paragraph}` (every_step only) sits in the static prefix,
+#     and `{board_update_section}` sits at the very tail, after the
+#     observation, holding the append-only delta ledger
+# Everything before "==== Runtime State ====" must be byte-stable across steps
+# within one delegation; tests/test_prefix_identity.py asserts this.
+# =============================================================================
+SWEBENCH_IMPLEMENTER_PROMPT_STEP_REFRESH_TEMPLATE = """
+You are an autonomous software engineering agent (THREAD t{thread_id}) tasked with solving GitHub issues.
+You have access to a specialized command interface (ACI) for navigating, viewing, editing, and testing code.
+You will work in a Docker container with the repository already cloned and checked out to the correct commit.
+
+This task is being attempted by multiple parallel solver threads (you are one of them). Threads do NOT see
+each other's code or container — only the SHARED LESSONS blackboard below. Cooperate via lessons.
+{strategy_section}
+==== Your Task (from PlannerAgent) ====
+{task_instruction}
+
+==== Context (from previous attempts) ====
+{context}
+{dispatch_board_section}
+==== Command Reference ====
+{command_docs}
+
+When your fix adds a branch that serializes/parses/converts a value, guard it so an unexpected input falls back to the prior behavior instead of raising.
+
+EXISTING TESTS ARE READ-ONLY. Make the minimal fix in SOURCE files only. Do NOT edit files under a `tests/` or `testing/` directory to make old tests match your change — the grader supplies the official tests and discards any test edits you make, so it never helps (and wastes your budget). You may READ and RUN existing tests freely. If an existing test fails only because it still asserts the OLD behavior, that is expected verification evidence — `finish done` once your source change is verified (write a temporary repro script OUTSIDE the test tree if you need to confirm behavior).
+
+=== SUBMIT DISCIPLINE ===
+Before `finish done`: run a reproduction script OUTSIDE tests OR a focused `pytest path/to/test_x.py::test_y`. Put the exact command+result in PATCH_SUMMARY.evidence (no "TBD"/"pending"/"should work"; the verifier drops those). For broad framework edits (base class, __init__, widely-imported module), run one adjacent NEGATIVE CHECK and name it in evidence. Prefer focused tests over broad suites. If a peer FAIL is related, explain in evidence/risk why your fix avoids that failure mode.
+
+=== FINISH (Report to PlannerAgent) ===
+finish <status> <message>
+    Report your progress back to PlannerAgent. Status MUST be one of:
+    - done: fix verified by RUNNING it — on the issue's case AND one awkward input (empty/None/odd type) — and it returns, not raises
+    - partial: Made progress but not finished (e.g., found bug but fix not working)
+{board_update_paragraph}
+==== OUTPUT FORMAT (STRICT) ====
+You MUST output EXACTLY three sections in this order. No other text allowed.
+
+DISCUSSION
+<your reasoning here>
+
+NOTE
+<TYPE> <content>
+[optional additional lines: <TYPE> <content>]
+
+COMMAND
+<single command here>
+
+RULES:
+- All three sections (DISCUSSION, NOTE, COMMAND) are REQUIRED. A response missing
+  the NOTE header is a parse error and will be replayed.
+- DISCUSSION must contain your step-by-step reasoning.
+- __NOTE_RULES_SENTINEL__
+- COMMAND must contain exactly ONE command on a single line. After the COMMAND
+  line, do NOT add any explanation, examples, or comments. Do NOT output
+  anything after the command.
+
+==== Runtime State ====
+==== Progress ====
+[Step {current_step}/{max_steps}] Remaining: {remaining_steps} step(s)
+{budget_warning}
+If you run out of steps without "finish", an automatic partial handoff is recorded and your repo edits are preserved — but an explicit `finish partial ...` is strongly preferred, because you can summarize what you did, what's left, and any pitfalls far more usefully than the automatic handoff can.
+
+==== Current State ====
+{state_info}
+
+==== Memory ====
+Recent memory:
+{memory}
+
+==== Current Observation ====
+{observation}
+{board_update_section}
+Remember: output exactly DISCUSSION, NOTE, COMMAND.
+"""
+
+
+def build_implementer_prompt_step_refresh(
+    task_instruction: str,
+    context: str,
+    command_docs: str,
+    state_info: str,
+    memory: str,
+    observation: str,
+    current_step: int,
+    max_steps: int,
+    dispatch_board_block: str,
+    board_update_section: str,
+    thread_id: int = 0,
+    board_updates_enabled: bool = False,
+    board_update_paragraph: str = "",
+    peer_patch_protocol_enabled: bool = False,
+    patch_summary_timing_rule_enabled: bool = False,
+    strategy_prefix: str = "",
+) -> str:
+    """Prompt for the dispatch_only and every_step refresh modes.
+
+    `dispatch_board_block` is the frozen dispatch-time render (may be empty);
+    `board_update_section` is the pre-rendered delta ledger section, empty in
+    dispatch_only mode and while no deltas have arrived.
+    """
+    remaining_steps = max_steps - current_step
+    if remaining_steps <= 3:
+        budget_warning = "🚨 CRITICAL: Only {} steps left! Use 'finish' NOW to report your progress!".format(remaining_steps)
+    elif remaining_steps <= 5:
+        budget_warning = "⚠️ Warning: {} steps remaining. Plan to finish soon.".format(remaining_steps)
+    else:
+        budget_warning = ""
+
+    if _has_real_shared_lessons(dispatch_board_block):
+        peer_patch_protocol = (
+            f"\n{PEER_PATCH_PROTOCOL}\n"
+            if peer_patch_protocol_enabled and _has_peer_patch_summary(dispatch_board_block)
+            else ""
+        )
+        dispatch_board_section = (
+            "\n==== SHARED LESSONS (dispatch-time snapshot of peer threads' notes) ====\n"
+            f"{dispatch_board_block}\n\n"
+            f"{SHARED_LESSONS_GUIDANCE}\n"
+            f"{peer_patch_protocol}"
+        )
+    else:
+        dispatch_board_section = (
+            "\n==== SHARED LESSONS (dispatch-time snapshot of peer threads' notes) ====\n"
+            "(no shared lessons at dispatch)\n"
+        )
+
+    if strategy_prefix:
+        strategy_section = (
+            "\n==== STRATEGY (this thread's framing) ====\n"
+            f"{strategy_prefix}\n"
+        )
+    else:
+        strategy_section = ""
+
+    note_rules_block = build_note_rules_block(patch_summary_timing_rule_enabled)
+    return SWEBENCH_IMPLEMENTER_PROMPT_STEP_REFRESH_TEMPLATE.replace(
+        "__NOTE_RULES_SENTINEL__",
+        note_rules_block,
+    ).format(
+        task_instruction=task_instruction,
+        context=context if context else "No additional context provided.",
+        command_docs=command_docs,
+        state_info=state_info,
+        memory=memory,
+        observation=observation,
+        thread_id=thread_id,
+        current_step=current_step,
+        max_steps=max_steps,
+        remaining_steps=remaining_steps,
+        budget_warning=budget_warning,
+        dispatch_board_section=dispatch_board_section,
+        board_update_section=board_update_section,
+        board_update_paragraph=(
+            f"\n{board_update_paragraph}\n"
+            if (board_updates_enabled and board_update_paragraph) else ""
+        ),
+        strategy_section=strategy_section,
+    )
+
+
 def build_implementer_prompt(
     task_instruction: str,
     context: str,

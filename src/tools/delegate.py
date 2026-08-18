@@ -76,6 +76,7 @@ class DelegateTaskTool(BaseAction):
     implementer_strategy_prompt_enabled: bool = Field(default=False)
     prompt_cache_enabled: bool = Field(default=False)
     prompt_cache_min_prefix_chars: int = Field(default=16000)
+    refresh_mode: str = Field(default="legacy_full")
     # Memory compaction mode:
     # "llm"           — LLM prose summarizer (uses `summarizer_model`).
     # "deterministic" — zero-LLM structured extractor (memory_compactor).
@@ -110,8 +111,10 @@ class DelegateTaskTool(BaseAction):
         implementer_strategy_prompt_enabled: bool = False,
         prompt_cache_enabled: bool = False,
         prompt_cache_min_prefix_chars: int = 16000,
+        refresh_mode: str = "legacy_full",
     ):
         super().__init__()
+        self.refresh_mode = str(refresh_mode or "legacy_full").lower()
         self.env = env
         self.runner = runner
         self.models = models
@@ -219,6 +222,7 @@ class DelegateTaskTool(BaseAction):
             implementer_strategy_prompt_enabled=self.implementer_strategy_prompt_enabled,
             prompt_cache_static_layout=self.prompt_cache_enabled,
             prompt_cache_min_prefix_chars=self.prompt_cache_min_prefix_chars,
+            refresh_mode=self.refresh_mode,
         )
         
         original_instruction = getattr(self.env, 'instruction', None)
