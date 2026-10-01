@@ -6,398 +6,777 @@
 <title>DeLM — Decentralized Multi-Agent Systems with Shared Context</title>
 <script>document.documentElement.classList.add('js');</script><!-- content stays visible if JS is off -->
 
-<meta name="description" content="DeLM: a decentralized multi-agent framework where parallel agents coordinate through a shared, verified context and a task queue — no central controller." />
-
-<!-- Open Graph (edit url/image to your hosted domain) -->
+<meta name="description" content="DeLM replaces the main agent with a shared context and a task queue, so parallel coding agents stop waiting on each other and stop redoing each other's work." />
 <meta property="og:title" content="Decentralized Multi-Agent Systems with Shared Context" />
-<meta property="og:description" content="DeLM decentralizes multi-agent coordination through parallel agents, a shared verified context, and a task queue." />
-<meta property="og:image" content="website/first.png" />
+<meta property="og:description" content="DeLM replaces the main agent with a shared context and a task queue. More accurate and faster than Codex, Claude Code, their native subagents, and AOrchestra." />
+<meta property="og:image" content="https://yuzhenmao.github.io/DeLM/website/first.png" />
 <meta property="og:type" content="website" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
 <style>
+  /* Layout: one left-aligned reading column (max 1080px). Section labels sit in a
+     narrow left rail on desktop; figures and tables use the full column width.
+     Palette is lifted from the paper's own figures: the pale blue of "working",
+     the pale yellow of "waiting" (a bubble), and the crimson of the DeLM marks. */
   :root{
-    --bg:#ffffff;
-    --bg-soft:#f6f7f9;
-    --ink:#15181e;
-    --ink-2:#3c4250;
-    --ink-3:#727a87;
-    --line:#e7e9ee;
-    --line-strong:#d6dae1;
+    --paper:#f7f9fa;
+    --surface:#ffffff;
+    --ink:#17212b;
+    --ink-2:#414d5a;
+    --ink-3:#6b7785;
+    --line:#dde4e9;
+    --line-strong:#c5cfd7;
 
-    /* DeLM primary = the navy of the DeLM bars in the paper */
-    --primary:#1d3c63;
-    --primary-2:#2c5b94;
+    --delm:#1d4f91;          /* DeLM rows and links */
+    --delm-soft:#e6eff9;
+    --work:#b5d7e2;          /* timeline: working */
+    --work-deep:#2f6f86;
+    --wait:#fbeeb4;          /* timeline: waiting = a bubble */
+    --wait-deep:#8a6a00;
 
-    /* The three DeLM components, taken straight from the paper's figures */
-    --c-shared:#4a9d5b;   /* Shared Context (green)  */
-    --c-queue:#8b5fbf;    /* Task Queue (purple)     */
-    --c-agents:#5b8def;   /* Parallel Agents (blue)  */
+    --blue:#1d4f91;          /* hero + primary actions */
+    --blue-deep:#143a6e;
+    --blue-soft:#e6eff9;
+    --blue-line:#c4d6ec;
 
-    --cardinal:#8c1515;   /* Stanford accent, used sparingly */
+    --c-shared:#3f8f52;      /* Shared Context (green)  */
+    --c-queue:#7c4fb0;       /* Task Queue (purple)     */
+    --c-agents:#4a6fd0;      /* Parallel Agents (blue)  */
 
-    --maxw:1080px;
-    --read:760px;
-    --radius:16px;
-    --shadow:0 1px 2px rgba(16,24,40,.04), 0 12px 32px -16px rgba(16,24,40,.16);
-    --shadow-sm:0 1px 2px rgba(16,24,40,.05), 0 6px 16px -10px rgba(16,24,40,.18);
+    --display:"Schibsted Grotesk","Helvetica Neue",Arial,sans-serif;
+    --body:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+
+    --wrap:1000px;
+    --read:none;
+    --rail:168px;
+    --radius:10px;
   }
 
-  *{box-sizing:border-box;}
-  html{scroll-behavior:smooth;}
+  *,*::before,*::after{box-sizing:border-box;}
+  html{scroll-behavior:smooth;scroll-padding-top:72px;-webkit-text-size-adjust:100%;}
   body{
-    margin:0;
-    background:var(--bg);
-    color:var(--ink-2);
-    font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-    font-size:17px;
-    line-height:1.7;
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:var(--body);font-size:17px;line-height:1.65;
     -webkit-font-smoothing:antialiased;
-    text-rendering:optimizeLegibility;
   }
-  h1,h2,h3{font-family:"Space Grotesk",Inter,sans-serif;color:var(--ink);margin:0;}
-  a{color:var(--primary-2);text-decoration:none;}
-  a:hover{text-decoration:underline;}
-  img{max-width:100%;display:block;}
+  img,video{max-width:100%;height:auto;display:block;}
+  a{color:var(--delm);text-decoration-thickness:1px;text-underline-offset:3px;}
+  a:hover{text-decoration-thickness:2px;}
+  h1,h2,h3{font-family:var(--display);color:var(--ink);text-wrap:balance;margin:0;}
+  p{margin:0;}
+  code,.mono{font-family:var(--mono);font-size:.9em;}
+  :focus-visible{outline:2.5px solid var(--c-agents);outline-offset:3px;border-radius:4px;}
 
-  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px;}
-
-  /* ---------- tricolor signature (the three DeLM components) ---------- */
-  .tricolor{display:inline-flex;gap:5px;align-items:center;}
-  .tricolor span{display:block;height:4px;width:34px;border-radius:99px;}
-  .tricolor span:nth-child(1){background:var(--c-shared);}
-  .tricolor span:nth-child(2){background:var(--c-queue);}
-  .tricolor span:nth-child(3){background:var(--c-agents);}
-  .dots{display:inline-flex;gap:4px;margin-left:8px;vertical-align:middle;}
-  .dots i{width:7px;height:7px;border-radius:50%;display:block;}
-  .dots i:nth-child(1){background:var(--c-shared);}
-  .dots i:nth-child(2){background:var(--c-queue);}
-  .dots i:nth-child(3){background:var(--c-agents);}
+  .wrap{max-width:var(--wrap);margin-inline:auto;padding-inline:clamp(18px,4vw,40px);}
 
   /* ---------- nav ---------- */
-  .nav{
-    position:sticky;top:0;z-index:50;
-    background:rgba(255,255,255,.82);
-    backdrop-filter:saturate(180%) blur(12px);
-    -webkit-backdrop-filter:saturate(180%) blur(12px);
-    border-bottom:1px solid var(--line);
+  .nav{position:sticky;top:0;z-index:20;background:rgba(247,249,250,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
+  .nav-inner{display:flex;align-items:center;gap:24px;height:56px;}
+  .brand{font-family:var(--display);font-weight:700;font-size:1.1rem;color:var(--ink);text-decoration:none;letter-spacing:-.01em;}
+  .brand span{color:var(--blue);}
+  .nav-links{display:flex;gap:22px;margin-left:auto;font-size:.92rem;}
+  .nav-links a{color:var(--ink-2);text-decoration:none;font-weight:500;}
+  .nav-links a:hover{color:var(--delm);}
+  .nav-cta{display:flex;gap:8px;}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:8px;
+    font-family:var(--body);font-weight:600;font-size:.95rem;text-decoration:none;
+    border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);cursor:pointer;
+    transition:border-color .15s ease,background .15s ease,color .15s ease;
   }
-  .nav-inner{max-width:var(--maxw);margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;}
-  .brand{display:inline-flex;align-items:center;font-family:"Space Grotesk";font-weight:700;font-size:1.2rem;color:var(--ink);letter-spacing:-.01em;}
-  .brand:hover{text-decoration:none;}
-  .nav-links{display:flex;align-items:center;gap:22px;}
-  .nav-links a{color:var(--ink-2);font-weight:500;font-size:.96rem;display:inline-flex;align-items:center;gap:7px;}
-  .nav-links a:hover{color:var(--primary);text-decoration:none;}
-  .icon-btn{display:inline-flex;align-items:center;justify-content:center;color:var(--ink-2);}
-  .icon-btn svg{width:22px;height:22px;}
-  .icon-btn:hover{color:var(--primary);}
+  .btn:hover{border-color:var(--ink);}
+  .btn svg{width:17px;height:17px;flex:none;}
+  .btn--primary{background:var(--ink);border-color:var(--ink);color:#fff;}
+  .btn--primary:hover{background:var(--blue);border-color:var(--blue);}
+  .btn--icon{padding-inline:12px;}
+  .btn--sm{padding:6px 12px;font-size:.86rem;}
+
+
+  /* ---------- side table of contents (wide screens) ---------- */
+  .toc{position:fixed;left:max(20px,calc((100vw - var(--wrap)) / 2 - 196px));top:50%;transform:translateY(-50%);z-index:15;display:none;flex-direction:column;gap:15px;}
+  .toc::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:2px;background:var(--line);border-radius:2px;}
+  .toc a{position:relative;display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--ink-3);font-size:.86rem;font-weight:500;white-space:nowrap;}
+  .toc a i{flex:none;width:12px;height:12px;border-radius:50%;background:var(--paper);border:2px solid var(--line-strong);transition:background .2s ease,border-color .2s ease,box-shadow .2s ease;}
+  .toc a:hover{color:var(--blue);}
+  .toc a:hover i{border-color:var(--blue);}
+  .toc a.active{color:var(--blue);font-weight:600;}
+  .toc a.active i{background:var(--blue);border-color:var(--blue);box-shadow:0 0 0 4px rgba(29,79,145,.15);}
+  @media (min-width:1400px){
+    .toc{display:flex;}
+    .nav-links{display:none;}
+    .nav-cta{margin-left:auto;}
+  }
 
   /* ---------- hero ---------- */
-  .hero{padding:clamp(56px,9vw,104px) 0 clamp(40px,6vw,60px);text-align:center;}
-  .hero .wrap{max-width:1320px;}            /* extra room so the title sits on one line */
-  .eyebrow{
-    font-family:"JetBrains Mono",monospace;font-size:.78rem;font-weight:500;
-    letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);
+  .hero{padding-block:clamp(20px,3.5vw,40px) clamp(28px,4vw,44px);}
+  .hero-card{
+    position:relative;overflow:hidden;text-align:center;
+    border:1px solid var(--blue-line);border-radius:24px;
+    background:
+      radial-gradient(90% 70% at 12% 0%, #d3e3f6 0%, transparent 60%),
+      radial-gradient(80% 70% at 95% 30%, #dfeaf8 0%, transparent 65%),
+      linear-gradient(180deg,#f3f7fc,var(--blue-soft));
+    padding:clamp(36px,6vw,64px) clamp(18px,5vw,56px) clamp(84px,10vw,112px);
+    display:flex;flex-direction:column;align-items:center;gap:20px;
   }
-  .hero h1{
-    font-size:clamp(1.4rem,3.3vw,2.85rem);font-weight:700;line-height:1.08;letter-spacing:-.025em;
-    margin:18px auto 0;white-space:nowrap;                 /* one line on desktop */
-  }
-  .hero .lede{
-    font-size:clamp(1.08rem,2.1vw,1.32rem);color:var(--ink-2);line-height:1.55;
-    max-width:820px;margin:18px auto 0;
-  }
-  .authors{margin:24px auto 0;font-size:1.05rem;color:var(--ink);font-weight:500;}
-  .authors a{color:var(--ink);}
-  .affil{margin-top:6px;color:var(--ink-3);font-size:.95rem;}
-  .affil .mono{font-family:"JetBrains Mono",monospace;font-size:.85rem;}
+  .hero h1{font-size:clamp(3rem,9vw,5.4rem);line-height:1;letter-spacing:-.035em;font-weight:700;color:var(--blue);}
+  .hero .subtitle{font-family:var(--display);font-weight:500;font-size:clamp(1.15rem,2.4vw,1.6rem);line-height:1.25;letter-spacing:-.01em;color:var(--ink);text-wrap:balance;max-width:26ch;}
+  .pills{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;}
+  .pills span{font-family:var(--mono);font-size:.8rem;padding:6px 12px;border-radius:999px;border:1px solid var(--blue-line);background:rgba(255,255,255,.6);color:var(--blue-deep);}
+  .overview-fig{margin-top:32px;}
+  .overview-fig figcaption{max-width:none;}
+  .overview-h{font-size:clamp(1.6rem,3.2vw,2.3rem);line-height:1.12;letter-spacing:-.022em;font-weight:700;margin-bottom:22px;}
+  .sec-body > h2{max-width:none;}
+  .lede{margin-top:12px;font-size:.92rem;line-height:1.55;color:var(--ink-3);}
+  mark{background:linear-gradient(transparent 12%,var(--wait) 12%,var(--wait) 92%,transparent 92%);color:inherit;padding:0 .18em;border-radius:2px;}
+  .authors{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 18px;font-size:1.02rem;color:var(--ink);font-weight:500;}
+  .affil{font-size:.92rem;color:var(--ink-3);margin-top:-10px;}
+  .hero-links{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:4px;}
+  .hero .btn--primary{background:var(--blue);border-color:var(--blue);}
+  .hero .btn--primary:hover{background:var(--blue-deep);border-color:var(--blue-deep);}
+  .hero .btn--dark{background:var(--ink);border-color:var(--ink);color:#fff;}
+  .hero .btn--dark:hover{background:#000;}
+  /* agent timelines along the bottom edge: blue = working, yellow = a bubble */
+  .lanes{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:5px;padding:0 0 16px;}
+  .lane{display:flex;gap:4px;height:9px;}
+  .lane i{display:block;height:100%;border-radius:2px;background:#9fc0e6;}
+  .lane i.w{background:var(--wait);}
+  .lane:nth-child(2) i{background:#7fa8d8;} .lane:nth-child(2) i.w{background:var(--wait);}
+  .lane:nth-child(3) i{background:#5c8cc6;} .lane:nth-child(3) i.w{background:var(--wait);}
 
-  /* compact icon links to paper + code (replaces the big buttons) */
-  .links{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:28px;}
-  .link-pill{
-    display:inline-flex;align-items:center;gap:8px;
-    font-family:"Inter";font-weight:600;font-size:.98rem;color:var(--ink);background:#fff;
-    border:1px solid var(--line-strong);border-radius:999px;padding:.5em 1.1em;cursor:pointer;
-    transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease, color .15s ease;
-  }
-  .link-pill svg{width:17px;height:17px;}
-  .link-pill:hover{border-color:var(--primary);color:var(--primary);transform:translateY(-2px);box-shadow:var(--shadow-sm);text-decoration:none;}
+  /* ---------- video ---------- */
+  .video-wrap{border-radius:var(--radius);overflow:hidden;border:1px solid var(--line-strong);background:#fff;line-height:0;}
+  .video-wrap video{width:100%;height:auto;background:#fff;}
+  .video-cap{margin-top:12px;font-size:.92rem;color:var(--ink-3);}
 
-  /* one-line takeaway under the video */
-  .takeaway{
-    max-width:1000px;margin:26px auto 0;text-align:center;
-    font-size:1.02rem;line-height:1.6;color:var(--ink-2);
-  }
-  .takeaway .tk{
-    font-family:"JetBrains Mono",monospace;font-size:.7rem;font-weight:500;
-    letter-spacing:.14em;text-transform:uppercase;color:var(--primary);
-    background:rgba(29,60,99,.08);border-radius:6px;padding:3px 9px;margin-right:10px;
-    white-space:nowrap;vertical-align:middle;
-  }
-  .takeaway strong{color:var(--ink);font-weight:700;}
-
-  .hero .tricolor{margin-top:42px;}
+  /* ---------- headline numbers ---------- */
+  .numbers{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin-top:clamp(32px,5vw,52px);border-top:1px solid var(--ink);border-bottom:1px solid var(--line);}
+  .numbers > div{padding:20px 20px 22px 0;}
+  .numbers > div + div{padding-left:20px;border-left:1px solid var(--line);}
+  .numbers .n{font-family:var(--display);font-weight:700;font-size:clamp(1.9rem,3.6vw,2.6rem);letter-spacing:-.03em;line-height:1;color:var(--delm);}
+  .numbers .n small{font-size:.5em;font-weight:600;letter-spacing:0;margin-left:3px;}
+  .numbers .l{margin-top:10px;font-size:.92rem;line-height:1.45;color:var(--ink-2);}
 
   /* ---------- sections ---------- */
-  .section{padding:clamp(54px,8vw,96px) 0;border-top:1px solid var(--line);}
-  .section-head{margin-bottom:30px;}
-  .section-head .eyebrow{display:block;}
-  .section-head h2{font-size:clamp(1.5rem,3vw,2.05rem);font-weight:600;letter-spacing:-.02em;margin-top:10px;}
+  .section{padding-block:clamp(48px,7vw,84px);border-top:1px solid var(--line);}
+  .section--first{border-top:0;padding-top:clamp(20px,3vw,32px);}
+  .sec-grid{display:block;}
+  .sec-label{font-family:var(--mono);font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);padding-top:.7em;}
+  .sec-body{min-width:0;display:flex;flex-direction:column;gap:28px;}
+  .sec-body > h2{font-size:clamp(1.6rem,3.2vw,2.3rem);line-height:1.12;letter-spacing:-.022em;font-weight:700;max-width:28ch;}
+  .sec-body > h3,.sub h3{font-size:1.22rem;letter-spacing:-.01em;font-weight:600;line-height:1.25;}
+  .prose{max-width:var(--read);display:flex;flex-direction:column;gap:16px;color:var(--ink-2);}
+  .prose b,.prose strong{color:var(--ink);font-weight:600;}
+  .sub{display:flex;flex-direction:column;gap:20px;padding-top:28px;border-top:1px solid var(--line);}
 
-  /* video */
-  .video-wrap{
-    position:relative;
-    width:100%;
-    border-radius:var(--radius);
-    overflow:hidden;
-    border:1px solid var(--line);
-    box-shadow:var(--shadow);
-    background:#0e1726;
-    line-height:0;          /* 顺手消除行内元素底部的缝隙 */
-  }
-  .video-wrap video{
-    width:100%;
-    height:auto;            /* 高度交给视频自己,黑边消失 */
-    display:block;
-  }
-  /* placeholder shown until you drop in a video — remove this block once you do */
-  .video-ph{
-    position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
-    color:#fff;text-align:center;padding:24px;
-    background:
-      radial-gradient(120% 120% at 18% 12%, rgba(91,141,239,.42), transparent 55%),
-      radial-gradient(120% 120% at 85% 22%, rgba(139,95,191,.40), transparent 55%),
-      radial-gradient(140% 140% at 50% 110%, rgba(74,157,91,.40), transparent 60%),
-      linear-gradient(135deg,#11203a,#0c1424);
-  }
-  .play{
-    width:76px;height:76px;border-radius:50%;display:grid;place-items:center;
-    background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.55);
-    backdrop-filter:blur(4px);transition:transform .2s ease, background .2s ease;
-  }
-  .video-wrap:hover .play{transform:scale(1.06);background:rgba(255,255,255,.2);}
-  .play svg{width:30px;height:30px;margin-left:4px;fill:#fff;}
-  .video-ph .ph-title{font-family:"Space Grotesk";font-weight:600;font-size:1.15rem;letter-spacing:.01em;}
-  .video-ph .ph-sub{font-size:.92rem;color:rgba(255,255,255,.7);max-width:46ch;line-height:1.5;}
+  /* figures */
+  figure{margin:0;}
+  .fig{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:clamp(12px,2.6vw,28px);}
+  .fig img{margin-inline:auto;}
+  .fig--narrow img{max-width:min(100%,460px);}
+  figcaption{margin-top:12px;font-size:.92rem;line-height:1.55;color:var(--ink-3);}
+  figcaption b{color:var(--ink-2);font-weight:600;}
 
-  /* figure */
-  .figure-card{
-    border:1px solid var(--line);border-radius:var(--radius);background:#fff;
-    padding:clamp(16px,3.5vw,40px);box-shadow:var(--shadow);
-  }
-  .figure-card img{margin:0 auto;}
-  .figure-cap{max-width:880px;margin:24px auto 0;font-size:.95rem;color:var(--ink-3);line-height:1.6;text-align:center;}
-  .figure-cap b{color:var(--ink-2);}
-  .idea-text{max-width:760px;margin:0 auto;font-size:1.08rem;line-height:1.78;color:var(--ink-2);}
+  /* three bubble kinds */
+  .kinds{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border-top:1px solid var(--ink);}
+  .kind{padding:20px 22px 4px 0;display:flex;flex-direction:column;gap:8px;}
+  .kind + .kind{padding-left:22px;border-left:1px solid var(--line);}
+  .kind .who{font-family:var(--mono);font-size:.78rem;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);}
+  .kind h3{font-size:1.14rem;font-weight:600;}
+  .kind p b{color:var(--ink);font-weight:600;}
+  .kind h3 span{background:var(--wait);padding:1px 6px;border-radius:3px;}
+  .kind p{font-size:.97rem;line-height:1.58;color:var(--ink-2);}
 
-  /* abstract — centered column */
-  .section--abstract{text-align:center;}
-  .abstract-body{max-width:var(--read);margin-left:auto;margin-right:auto;text-align:left;}
-  .abstract-body p{margin:0;font-size:1.08rem;line-height:1.78;color:var(--ink-2);}
-  .abstract-body .lead-letter{} /* hook if you want a drop cap later */
+  /* key idea */
+  .keyidea{border-left:4px solid var(--delm);background:var(--delm-soft);padding:20px 24px;border-radius:0 var(--radius) var(--radius) 0;max-width:78ch;}
+  .keyidea .t{font-family:var(--mono);font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--delm);font-weight:600;margin-bottom:8px;}
+  .keyidea p{color:var(--ink);font-size:1.04rem;line-height:1.6;}
 
-  /* citation */
-  .section--cite{background:var(--bg-soft);}
-  .cite-card{position:relative;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line-strong);box-shadow:var(--shadow);}
-  .cite-bar{display:flex;align-items:center;justify-content:space-between;background:#eef2f7;color:var(--ink-3);padding:11px 16px;font-family:"JetBrains Mono",monospace;font-size:.8rem;letter-spacing:.03em;border-bottom:1px solid var(--line);}
-  .cite-bar .label{display:inline-flex;align-items:center;gap:9px;}
-  .cite-bar .label .dotrow{display:inline-flex;gap:5px;}
-  .cite-bar .label .dotrow i{width:9px;height:9px;border-radius:50%;display:block;}
-  .cite-bar .label .dotrow i:nth-child(1){background:var(--c-shared);}
-  .cite-bar .label .dotrow i:nth-child(2){background:var(--c-queue);}
-  .cite-bar .label .dotrow i:nth-child(3){background:var(--c-agents);}
-  .copy-btn{
-    background:#fff;border:1px solid var(--line-strong);color:var(--ink-2);border-radius:8px;
-    padding:6px 13px;font-family:"JetBrains Mono",monospace;font-size:.78rem;cursor:pointer;
-    display:inline-flex;align-items:center;gap:7px;transition:all .15s ease;
-  }
-  .copy-btn:hover{border-color:var(--primary);color:var(--primary);}
-  .copy-btn.copied{border-color:var(--c-shared);color:#2f7d4f;}
-  .copy-btn svg{width:14px;height:14px;}
-  pre.bibtex{
-    margin:0;background:#fff;color:var(--ink-2);padding:22px 18px;overflow-x:auto;
-    font-family:"JetBrains Mono",monospace;font-size:.86rem;line-height:1.65;
-  }
-  pre.bibtex .k{color:#2c5b94;}     /* keys (blue)    */
-  pre.bibtex .t{color:#7341a3;}     /* type (purple)  */
-  pre.bibtex .v{color:#2f7d4f;}     /* values (green) */
+  /* tables */
+  .table-scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);}
+  table{border-collapse:collapse;width:100%;font-size:.93rem;font-variant-numeric:tabular-nums;}
+  caption{caption-side:bottom;text-align:left;padding:12px 16px;font-size:.86rem;color:var(--ink-3);border-top:1px solid var(--line);}
+  th,td{padding:10px 16px;text-align:left;white-space:nowrap;}
+  thead th{font-family:var(--mono);font-size:.74rem;font-weight:500;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);border-bottom:1px solid var(--line-strong);background:var(--surface);}
+  tbody tr + tr > *{border-top:1px solid var(--line);}
+  tbody th{font-weight:500;color:var(--ink);}
+
+  .mech th:not(:first-child),.mech td{text-align:center;}
+  .mech thead th{white-space:normal;line-height:1.35;vertical-align:bottom;min-width:104px;}
+  .mech thead tr:first-child th{border-bottom:0;padding-bottom:2px;color:var(--ink-2);}
+  .mech .yes{color:var(--c-shared);font-weight:700;}
+  .mech .no{color:var(--line-strong);}
+  .mech tr.delm > *{background:var(--delm-soft);}
+  .mech tr.delm th{font-weight:700;color:var(--delm);}
+  .mech .split{border-left:1px solid var(--line);}
+
+  .results tr.group th{font-family:var(--mono);font-size:.76rem;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2);background:var(--paper);padding-block:7px;border-top:1px solid var(--line-strong);}
+  .results tbody:first-of-type tr.group th{border-top:0;}
+  .results tr.delm > *{background:var(--delm-soft);}
+  .results tr.delm th{font-weight:700;color:var(--delm);}
+  .results b{font-weight:700;color:var(--ink);}
+  .results .sd{color:var(--ink-3);font-size:.84em;}
+  .results .unit{color:var(--ink-3);font-size:.84em;}
+  .results sup{color:var(--ink-3);margin-left:1px;}
+  .results{font-size:.88rem;}
+  .results th,.results td{padding-inline:11px;}
+  .results td.acc{min-width:132px;}
+  .results caption{white-space:normal;line-height:1.5;}
+  .ctx thead tr:first-child th{border-bottom:0;padding-bottom:2px;color:var(--ink-2);}
+  .ctx tbody th{vertical-align:top;}
+  .results .acc .num{display:block;}
+  .results .bar{display:block;height:5px;margin-top:5px;background:var(--line);border-radius:3px;overflow:hidden;}
+  .results .bar i{display:block;height:100%;background:var(--ink-3);border-radius:3px;}
+  .results tr.delm .bar{background:var(--blue-line);}
+  .results tr.delm .bar i{background:var(--delm);}
+  .sp{display:inline-block;min-width:4.4em;text-align:center;padding:2px 8px;border-radius:4px;font-family:var(--mono);font-size:.86em;font-weight:500;background:var(--paper);color:var(--ink-2);border:1px solid var(--line);}
+  .sp.up{background:var(--work);border-color:var(--work);color:#123b49;}
+  .sp.down{background:var(--wait);border-color:var(--wait);color:#5b4600;}
+  .table-note{font-size:.86rem;color:var(--ink-3);max-width:86ch;line-height:1.5;}
+
+  /* expandable list of selected tasks */
+  .tasklist{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);}
+  .tasklist summary{cursor:pointer;padding:12px 16px;font-weight:600;font-size:.95rem;color:var(--blue);}
+  .tasklist summary:hover{color:var(--blue-deep);}
+  .tasklist[open] summary{border-bottom:1px solid var(--line);}
+  .tasklist-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:16px;}
+  .tasklist .table-scroll{border-color:var(--line);}
+  .tasklist .table-note{padding:0 16px 14px;max-width:none;}
+  .tasks{font-size:.8rem;}
+  .tasks th,.tasks td{padding:7px 10px;}
+  .tasks td:last-child,.tasks th:last-child{text-align:right;}
+  .tasks tr.avg > *{border-top:1px solid var(--line-strong);font-weight:600;color:var(--ink);}
+
+  /* tabs */
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;}
+  .tab{font-family:var(--body);font-size:.95rem;font-weight:600;padding:8px 14px;border-radius:8px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink-2);cursor:pointer;}
+  .tab:hover{border-color:var(--ink);color:var(--ink);}
+  .tab[aria-selected="true"]{background:var(--ink);border-color:var(--ink);color:#fff;}
+  html:not(.js) .tabs{display:none;}
+  .panel{display:flex;flex-direction:column;gap:16px;}
+  .panel[hidden]{display:none;}
+  .panel + .panel{margin-top:28px;}
+  .js .panel + .panel{margin-top:0;}
+  .panel h3{font-size:1.1rem;font-weight:600;}
+  .js .panel h3{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);}
+
+  /* method */
+  .ops{list-style:none;margin:0;padding:0;counter-reset:op;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;border-top:1px solid var(--ink);}
+  .ops li{counter-increment:op;padding:16px 16px 4px 0;font-size:.95rem;line-height:1.5;color:var(--ink-2);}
+  .ops li + li{padding-left:16px;border-left:1px solid var(--line);}
+  .ops li::before{content:counter(op);display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;font-family:var(--display);font-weight:700;font-size:.85rem;margin-bottom:10px;}
+  .ops li{color:var(--ink);font-weight:500;}
+
+  .part{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--part,var(--ink));border-radius:var(--radius);padding:22px 24px 24px;display:flex;flex-direction:column;gap:12px;min-width:0;}
+  .parts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;}
+  .points{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:8px;}
+  .points li::marker{color:var(--blue);}
+  .part--shared{--part:var(--c-shared);}
+  .part--queue{--part:var(--c-queue);}
+  .part h3{font-size:1.22rem;font-weight:600;color:var(--part);}
+  .part p,.part li{font-size:.97rem;line-height:1.58;color:var(--ink-2);}
+  .part ul{margin:0;padding-left:1.1em;display:flex;flex-direction:column;gap:8px;}
+  .part b{color:var(--ink);font-weight:600;}
+  .tag{font-family:var(--mono);font-size:.8em;font-weight:600;padding:1px 6px;border-radius:3px;white-space:nowrap;}
+  .tag--fact{background:#e3f1e6;color:#236638;}
+  .tag--fail{background:#f8e2e1;color:#a52a22;}
+  .tag--done{background:#e8ecf1;color:var(--ink-2);}
+
+  /* log excerpt */
+  .log{background:#141c25;border-radius:var(--radius);overflow:hidden;}
+  .log-bar{font-family:var(--mono);font-size:.76rem;letter-spacing:.04em;color:#93a1af;padding:10px 16px;border-bottom:1px solid #26313d;}
+  .log pre{margin:0;padding:16px;overflow-x:auto;font-family:var(--mono);font-size:.84rem;line-height:1.75;color:#d7dee5;white-space:pre-wrap;overflow-wrap:anywhere;}
+  .log .fact{color:#7fd197;font-weight:600;}
+  .log .exec{color:#f0d77a;font-weight:600;}
+  .log .a{color:#9db4f5;}
+  .sub > .prose,.sub > figure,.sub > .log,.sub > .table-scroll{margin:0;}
+
+  /* findings */
+  .findings{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 32px;}
+  .findings li{padding:18px 0;border-top:1px solid var(--line);font-size:.98rem;line-height:1.58;color:var(--ink-2);}
+  .findings li b{display:block;color:var(--ink);font-weight:600;font-size:1.04rem;margin-bottom:4px;}
+
+  .split2{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:28px;align-items:start;}
+
+  /* facts row (trace analysis) */
+  .facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border-top:1px solid var(--ink);}
+  .facts > div{padding:16px 16px 4px 0;}
+  .facts > div + div{padding-left:16px;border-left:1px solid var(--line);}
+  .facts .n{font-family:var(--display);font-weight:700;font-size:1.6rem;letter-spacing:-.02em;line-height:1.1;color:var(--ink);}
+  .facts .l{margin-top:6px;font-size:.9rem;line-height:1.45;color:var(--ink-2);}
+
+  /* bibtex */
+  .cite{background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--radius);overflow:hidden;}
+  .cite-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px 8px 16px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:.8rem;color:var(--ink-3);}
+  .cite pre{margin:0;padding:18px 16px;overflow-x:auto;font-family:var(--mono);font-size:.86rem;line-height:1.65;color:var(--ink-2);}
+  .copy-btn.copied{border-color:var(--c-shared);color:var(--c-shared);}
 
   /* footer */
-  .footer{border-top:1px solid var(--line);padding:48px 0 0;text-align:center;}
-  .footer .inst{font-family:"Space Grotesk";font-weight:600;color:var(--ink);font-size:1.05rem;}
-  .footer .flinks{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px 22px;justify-content:center;color:var(--ink-2);}
-  .footer .flinks a{color:var(--ink-2);font-weight:500;}
-  .footer .flinks a:hover{color:var(--primary);}
-  .footer .copy{margin-top:18px;color:var(--ink-3);font-size:.85rem;}
-  .footer-rule{margin-top:34px;height:4px;display:flex;}
+  .footer{border-top:1px solid var(--line);padding-block:32px 0;font-size:.92rem;color:var(--ink-3);}
+  .footer .wrap{display:flex;flex-wrap:wrap;gap:10px 24px;justify-content:space-between;}
+  .footer a{color:var(--ink-2);}
+  .footer-rule{margin-top:32px;height:5px;display:flex;}
   .footer-rule span{flex:1;}
   .footer-rule span:nth-child(1){background:var(--c-shared);}
   .footer-rule span:nth-child(2){background:var(--c-queue);}
   .footer-rule span:nth-child(3){background:var(--c-agents);}
 
-  /* ---------- reveal on scroll (only when JS is active) ---------- */
-  .js .reveal{opacity:0;transform:translateY(16px);transition:opacity .6s ease, transform .6s ease;}
-  .js .reveal.is-in{opacity:1;transform:none;}
-
-  @media (max-width:760px){
-    /* title is one line on desktop; let it wrap (and shrink) on small screens */
-    .hero h1{white-space:normal;font-size:clamp(1.85rem,7vw,2.45rem);max-width:18ch;margin-left:auto;margin-right:auto;}
+  /* ---------- responsive ---------- */
+  @media (max-width:900px){
+    .nav-links{display:none;}
+    .nav-cta{margin-left:auto;}
+    .ops{grid-template-columns:minmax(0,1fr);}
+    .ops li,.ops li + li{padding:14px 0 14px 40px;border-left:0;border-top:1px solid var(--line);position:relative;}
+    .ops li:first-child{border-top:0;}
+    .ops li::before{position:absolute;left:0;top:14px;margin:0;}
+    .split2{grid-template-columns:minmax(0,1fr);}
   }
-
-  @media (max-width:640px){
+  @media (max-width:720px){
     body{font-size:16px;}
-    .nav-links{gap:16px;}
-    .nav-links .paper-text{display:none;} /* keep icons tidy on small screens */
-    .links{gap:10px;}
-    .takeaway .tk{display:inline-block;margin-bottom:6px;}
+    .numbers,.facts{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .numbers > div,.numbers > div + div,.facts > div,.facts > div + div{padding:16px 14px 16px 0;border-left:0;}
+    .numbers > div:nth-child(even),.facts > div:nth-child(even){padding-left:14px;border-left:1px solid var(--line);}
+    .numbers > div:nth-child(n+3),.facts > div:nth-child(n+3){border-top:1px solid var(--line);}
+    .kinds,.parts,.findings,.tasklist-grid{grid-template-columns:minmax(0,1fr);}
+    .kind,.kind + .kind{padding:18px 0;border-left:0;}
+    .kind + .kind{border-top:1px solid var(--line);}
+    th,td{padding:9px 12px;}
+    .fig{overflow-x:auto;}
+    .fig:not(.fig--narrow) img{width:600px;max-width:none;}
   }
-
   @media (prefers-reduced-motion:reduce){
     html{scroll-behavior:auto;}
-    .js .reveal{opacity:1;transform:none;transition:none;}
-    .link-pill,.play{transition:none;}
+    .btn,.toc a i{transition:none;}
   }
-  :focus-visible{outline:2.5px solid var(--primary-2);outline-offset:3px;border-radius:6px;}
 </style>
 </head>
 <body>
 
-<!-- ============================= NAV ============================= -->
-<nav class="nav">
-  <div class="nav-inner">
-    <a class="brand" href="#top">DeLM</a>
+<nav class="nav" aria-label="Page">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top">De<span>LM</span></a>
     <div class="nav-links">
-      <a href="https://arxiv.org/abs/2606.10662" class="paper-link" target="_blank" rel="noopener">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-        <span class="paper-text">Paper</span>
-      </a>
-      <a class="icon-btn" href="https://github.com/yuzhenmao/DeLM" target="_blank" rel="noopener" aria-label="GitHub repository" title="GitHub">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-1.9c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0C17 5.6 18 5.9 18 5.9c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.5 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
-      </a>
+      <a href="#overview">Overview</a>
+      <a href="#problem">Motivation</a>
+      <a href="#idea">Idea</a>
+      <a href="#method">Method</a>
+      <a href="#results">Results</a>
+      <a href="#analysis">Trace analysis</a>
+      <a href="#cite">BibTeX</a>
+    </div>
+    <div class="nav-cta">
+      <a class="btn btn--sm" href="https://arxiv.org/abs/2606.10662" target="_blank" rel="noopener">Paper</a>
+      <a class="btn btn--sm btn--primary" href="https://github.com/yuzhenmao/DeLM" target="_blank" rel="noopener">Code</a>
     </div>
   </div>
 </nav>
 
+<nav class="toc" aria-label="On this page">
+  <a href="#overview"><i></i>Overview</a>
+  <a href="#problem"><i></i>Motivation</a>
+  <a href="#idea"><i></i>Idea</a>
+  <a href="#method"><i></i>Method</a>
+  <a href="#results"><i></i>Results</a>
+  <a href="#analysis"><i></i>Trace analysis</a>
+  <a href="#cite"><i></i>BibTeX</a>
+</nav>
+
 <a id="top"></a>
 
-<!-- ============================= HERO ============================= -->
 <header class="hero">
   <div class="wrap">
-    <h1>Decentralized Multi-Agent Systems with Shared Context</h1>
-    <p class="lede">Introducing a shared-context multi-agent framework (DeLM) that turns parallel execution into verified, reusable progress, supporting scalable, reliable, and self-coordinating test-time reasoning.</p>
-
-    <div class="links">
-      <a href="https://arxiv.org/abs/2606.10662" class="link-pill" aria-label="Read the paper" target="_blank" rel="noopener">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-        Paper
-      </a>
-      <a href="https://github.com/yuzhenmao/DeLM" target="_blank" rel="noopener" class="link-pill" aria-label="View code on GitHub">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-1.9c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0C17 5.6 18 5.9 18 5.9c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.5 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
-        Code
-      </a>
+    <div class="hero-card">
+      <h1>DeLM</h1>
+      <p class="subtitle">Decentralized Multi-Agent Systems with Shared Context</p>
+      <div class="pills"><span>Parallel Agents</span><span>Shared Context</span><span>Task Queue</span></div>
+      <div class="authors">
+        <span>Yuzhen Mao</span><span>Jerry Gu</span><span>Aadi Chauhan</span><span>Qizheng Zhang</span><span>Hangoo Kang</span><span>Azalia Mirhoseini</span>
+      </div>
+      <p class="affil">Stanford University</p>
+      <div class="hero-links">
+        <a class="btn btn--primary" href="https://arxiv.org/abs/2606.10662" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Paper
+        </a>
+        <a class="btn btn--dark" href="https://github.com/yuzhenmao/DeLM" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-1.9c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0C17 5.6 18 5.9 18 5.9c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.5 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+          Code
+        </a>
+        <a class="btn btn--icon" href="https://x.com/Mao_Yuzhen/status/2064732932997296554?s=20" target="_blank" rel="noopener" aria-label="Thread on X">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </a>
+      </div>
+      <div class="lanes" aria-hidden="true"><div class="lane"><i style="flex:22"></i><i class=w style="flex:2"></i><i style="flex:31"></i><i style="flex:18"></i><i class=w style="flex:1"></i><i style="flex:26"></i></div><div class="lane"><i style="flex:14"></i><i style="flex:27"></i><i class=w style="flex:3"></i><i style="flex:20"></i><i style="flex:36"></i></div><div class="lane"><i style="flex:30"></i><i style="flex:12"></i><i class=w style="flex:1"></i><i style="flex:25"></i><i class=w style="flex:2"></i><i style="flex:30"></i></div></div>
     </div>
-
   </div>
 </header>
 
-<!-- ============================= VIDEO ============================= -->
-<section class="section">
-  <div class="wrap reveal">
-    <!--
-      ▶ ADD YOUR VIDEO HERE — pick ONE option, then delete the .video-ph placeholder below.
-
-      OPTION A · local file (drop video.mp4 next to this page, e.g. in a /videos folder):
-        <video controls poster="images/figure3_delm_overview.png" preload="metadata">
-          <source src="video.mp4" type="video/mp4" />
-        </video>
-
-      OPTION B · YouTube embed (swap VIDEO_ID for your id):
-        <iframe src="https://www.youtube.com/embed/VIDEO_ID" title="DeLM overview"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowfullscreen></iframe>
-    -->
+<!-- ============================= VIDEO + HEADLINE NUMBERS ============================= -->
+<section class="section section--first" id="overview">
+  <div class="wrap">
+    <h2 class="overview-h">Overview</h2>
     <div class="video-wrap">
       <video controls poster="website/first.png" preload="metadata">
         <source src="website/delm-decentralized-vs-centralized.mp4" type="video/mp4" />
         Your browser does not support the video tag.
       </video>
     </div>
-  </div>
-</section>
-
-<!-- ============================= MAIN FIGURE ============================= -->
-<section class="section">
-  <div class="wrap reveal">
-    <div class="section-head">
-      <span class="eyebrow">The idea</span>
-      <h2>From a central controller to shared state</h2>
-    </div>
-
-    <figure class="figure-card" style="margin:0 0 28px;">
-      <img src="website/first.png"
-           alt="Centralized multi-agent systems route every subtask and result through one main agent, creating a bottleneck. DeLM coordinates through parallel agents, a shared verified context, and a task queue." />
-    </figure>
-
-    <p class="idea-text">
-      Unlike centralized multi-agent systems, which rely on a central controller and synchronous scatter–gather coordination, DeLM lets agents coordinate asynchronously through a shared, verified context. Agents claim tasks from a queue and write back compact, verified results as they finish, making progress visible to all workers without requiring a main agent to merge, filter, and rebroadcast it.
+    <p class="lede">
+      Existing multi-agent systems waste much of their parallelism in <mark>bubbles</mark>: agent time spent waiting on others or redoing a peer's work.
+      DeLM squeezes out most of these bubbles by having agents coordinate asynchronously through a shared context and a task queue, with no main agent in the loop.
     </p>
+
+    <figure class="overview-fig">
+      <div class="fig"><img src="website/teaser.png" width="1800" height="787"
+        alt="Two scatter plots of accuracy against speedup, for Terminal-Bench 4.0 and DeepSWE v1.1. DeLM points with two and four agents sit up and to the right of Codex, Claude Code, their native-subagent variants, and AOrchestra for both GPT-6-Astra and Claude Opus 5.5." /></div>
+      <figcaption>
+        <b>DeLM is both faster and more accurate than existing multi-agent coding systems.</b> Averaged over the two models, DeLM (<i>n</i> = 2) is 1.78× faster and 12.5 points more accurate than Codex/Claude Code (dashed line, 1×) on Terminal-Bench 4.0, and 1.38× faster and 13.3 points more accurate on DeepSWE v1.1. Each benchmark uses 10 long-horizon tasks.
+      </figcaption>
+    </figure>
   </div>
 </section>
 
-<!-- ============================= ABSTRACT ============================= -->
-<section class="section section--abstract">
-  <div class="wrap reveal">
-    <div class="section-head">
-      <span class="eyebrow">Abstract</span>
+<!-- ============================= PROBLEM ============================= -->
+<section class="section" id="problem">
+  <div class="wrap sec-grid">
+    <div class="sec-body">
+      <h2>Motivation: Bubbles</h2>
+      <div class="prose">
+        <p>Multi-agent systems (MAS) offer a natural way to scale large language model reasoning at test time: instead of solving a complex task in a single trajectory, they decompose it into subtasks, dispatch agents in parallel, and aggregate their progress. Borrowing a term from pipeline parallelism, we call agent time that does not advance the solution a <mark><i>bubble</i></mark>: time an agent spends waiting on others, or redoing work a peer has already done. Bubbles waste compute and stretch wall-clock time, and each of the three dominant families of MAS creates them in its own way.</p>
+      </div>
+
+      <div class="kinds">
+        <div class="kind"><span class="who">Independent agents</span><h3><span>Redundant work</span></h3><p>Their bubbles are <i>redundant work</i>: agents share nothing while they run, so each one rediscovers the faults, fixes, and dead ends its peers have already found.</p></div>
+        <div class="kind"><span class="who">Peer-communicating agents</span><h3><span>Barrier waits</span></h3><p>Their bubbles are <i>barrier waits</i>: each synchronous round lasts as long as its slowest agent, so agents that finish early sit idle.</p></div>
+        <div class="kind"><span class="who">Centralized orchestration</span><h3><span>Relay waits</span></h3><p>Their bubbles are <i>relay waits</i>: the main agent idles while delegated work runs, and sub-agents cannot build on each other's progress until the main agent relays it.</p></div>
+      </div>
+
+      <figure>
+        <div class="fig"><img src="website/bubbles.png" width="1800" height="802" loading="lazy"
+          alt="Execution timelines for the retro-console-soc task with four agents. Claude Code with native subagents takes 162.7 minutes with 44% of agent time waiting; its main agent's bar is mostly yellow waiting time. DeLM takes 29.3 minutes with 2% of agent time waiting, 5.5 times faster." /></div>
+        <figcaption><b>Centralized orchestration creates bubbles; DeLM squeezes them out.</b> Execution timelines on Terminal-Bench 4.0's <code>retro-console-soc</code> task with Claude Opus 5.5 and four agents. With Claude Code's centralized native subagents, the main agent spends 73% of its time waiting on delegated work (yellow), and 44% of all agent time is spent waiting.</figcaption>
+      </figure>
     </div>
-    <div class="abstract-body">
-      <p>
-        Multi-agent systems (MAS) can scale large language model reasoning at test time by decomposing complex problems into parallel subtasks. However, most existing MAS rely on centralized orchestration, where a main agent assigns work, collects outputs, and merges results. As the number of subtasks grows, this controller becomes a communication and integration bottleneck. We propose <b>Decentralized Language Models (DeLM)</b>, a MAS framework that decentralizes coordination through parallel agents, a shared verified context, and a task queue. Agents asynchronously claim subtasks, read accumulated progress, perform local reasoning, and write back compact verified updates. The shared context acts as a common communication substrate, enabling agents to build on one another's verified progress without routing every update through a central controller. Empirically, DeLM improves both software-engineering test-time scaling and long-context reasoning. On SWE-bench Verified, DeLM achieves the best performance across Avg.@1, Pass@2, and Pass@4, with gains of up to 10.5 percentage points over the strongest baseline, while reducing cost per task by roughly 50%. On LongBench-v2 Multi-Doc QA, DeLM achieves the highest average accuracy across four frontier model families, improving over the strongest baseline by up to 5.7 percentage points.
-      </p>
+  </div>
+</section>
+
+<!-- ============================= IDEA ============================= -->
+<section class="section" id="idea">
+  <div class="wrap sec-grid">
+    <div class="sec-body">
+      <h2>Replace the main agent with a shared context and a task queue</h2>
+      <figure>
+        <div class="fig"><img src="website/first.png" width="1800" height="806" loading="lazy"
+          alt="Left: a centralized system where one main agent reads and writes a global context, hands subtasks and subcontexts to sub-agents, and collects their returned results. Right: DeLM, where parallel agents read and write a shared context and a task queue directly." /></div>
+        <figcaption><b>Centralized vs. decentralized multi-agent systems.</b> Centralized MAS relies on a main agent to assign subcontexts, spawn sub-agents, and integrate their results, so progress is shared mainly through the main agent and sub-agents remain unaware of one another's work. In contrast, DeLM decentralizes coordination through parallel agents, a shared context, and a task queue: agents asynchronously claim ready tasks, publish findings incrementally to a shared context, and build on or correct each other's progress without a main agent in the loop.</figcaption>
+      </figure>
+
+      <div class="prose">
+        <p>We propose <b>Decentralized Language Models (DeLM)</b>, a coordination layer that squeezes out these bubbles by having agents coordinate asynchronously through a shared context and a task queue, with no main agent in the loop.</p>
+        <ul class="points">
+          <li><b>No barrier or relay waits.</b> Agents claim tasks from the task queue asynchronously, so no agent waits for a round to end or for a main agent to assign work.</li>
+          <li><b>No waiting on unfinished work.</b> Agents publish compact findings to the shared context as soon as they are usable, so peers build on intermediate progress instead of waiting for a relay.</li>
+          <li><b>No redundant work.</b> The task queue and shared context show what each agent is working on and which approaches have failed, so agents avoid redoing a peer's work.</li>
+          <li><b>Updates reach everyone.</b> Improvements and fixes are appended as new entries rather than relayed through a main agent, so every agent can pick up a peer's latest work without another round of delegation.</li>
+        </ul>
+      </div>
+
+      <div class="table-scroll">
+        <table class="mech">
+          <caption>Collaboration and coordination mechanisms in the compared multi-agent systems. A checkmark means the system provides the mechanism while a cross means that it does not.</caption>
+          <thead>
+            <tr><th></th><th colspan="3" scope="colgroup">General collaboration capabilities</th><th colspan="3" scope="colgroup" class="split">Explicit coordination mechanisms</th></tr>
+            <tr>
+              <th scope="col">System</th>
+              <th scope="col">Parallel subtask execution</th>
+              <th scope="col">Cross-agent work reuse</th>
+              <th scope="col">Feedback &amp; correction</th>
+              <th scope="col" class="split">Intermediate-results sharing</th>
+              <th scope="col">Peer-status awareness</th>
+              <th scope="col">Stateful shared context</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Isolated agents</th><td class="no" aria-label="no">✕</td><td class="no" aria-label="no">✕</td><td class="no" aria-label="no">✕</td><td class="no split" aria-label="no">✕</td><td class="no" aria-label="no">✕</td><td class="no" aria-label="no">✕</td></tr>
+            <tr><th scope="row">AOrchestra</th><td class="no" aria-label="no">✕</td><td class="yes" aria-label="yes">✓</td><td class="yes" aria-label="yes">✓</td><td class="no split" aria-label="no">✕</td><td class="no" aria-label="no">✕</td><td class="no" aria-label="no">✕</td></tr>
+            <tr><th scope="row">Codex</th><td class="yes" aria-label="yes">✓</td><td class="yes" aria-label="yes">✓</td><td class="yes" aria-label="yes">✓</td><td class="yes split" aria-label="yes">✓</td><td class="no" aria-label="no">✕</td><td class="no" aria-label="no">✕</td></tr>
+            <tr><th scope="row">Claude Code</th><td class="yes" aria-label="yes">✓</td><td class="yes" aria-label="yes">✓</td><td class="yes" aria-label="yes">✓</td><td class="yes split" aria-label="yes">✓</td><td class="no" aria-label="no">✕</td><td class="no" aria-label="no">✕</td></tr>
+            <tr class="delm"><th scope="row">DeLM</th><td class="yes" aria-label="yes">✓</td><td class="yes" aria-label="yes">✓</td><td class="yes" aria-label="yes">✓</td><td class="yes split" aria-label="yes">✓</td><td class="yes" aria-label="yes">✓</td><td class="yes" aria-label="yes">✓</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= METHOD ============================= -->
+<section class="section" id="method">
+  <div class="wrap sec-grid">
+    <div class="sec-body">
+      <h2>Decentralized Language Models (DeLM)</h2>
+      <div class="prose">
+        <p>Given a task <i>D</i>, DeLM runs <i>n</i> agents concurrently, each with its own persistent session and workspace. Agents coordinate through two shared structures, a shared context <i>C</i> and a task queue <i>T</i>, and each agent produces its own complete solution.</p>
+      </div>
+
+      <figure>
+        <div class="fig"><img src="website/overview.png" width="1800" height="1002" loading="lazy"
+          alt="Overview diagram of DeLM. A task queue holds subtasks T1 to T3. Parallel agents claim subtasks from the queue and read the shared context. Each agent's update is compressed into a gist G and appended to the shared context. Agents add more subtasks to the queue when needed, and otherwise finalize an answer." /></div>
+        <figcaption><b>Overview of DeLM.</b> Parallel agents asynchronously claim subtasks {<i>T<sub>i</sub></i>}, read the shared context, and implement {<i>T<sub>i</sub></i>} locally. Each agent's update is compressed and appended to the shared context as a gist <i>G<sub>i</sub></i>, making reusable progress visible to all agents.</figcaption>
+      </figure>
+
+      <ol class="ops">
+        <li>Initialize the task queue</li>
+        <li>Execute subtasks in parallel</li>
+        <li>Summarize and publish intermediate results</li>
+        <li>Update the task queue as work progresses</li>
+        <li>Finalize each agent's solution</li>
+      </ol>
+
+      <div class="prose">
+        <p>These operations proceed asynchronously rather than in lockstep: while one agent publishes a result, others keep working and can reuse it as soon as it appears.</p>
+      </div>
+
+      <div class="parts">
+        <div class="part part--shared">
+          <h3>Shared Context</h3>
+          <p>An append-only log of what agents learn. Each entry has a declared type: <span class="tag tag--fact">FACT</span> records a finding supported by observations, <span class="tag tag--fail">FAIL</span> records an approach or hypothesis that was contradicted, and <span class="tag tag--done">DONE</span> summarizes a finished subtask. Entries stay brief and attach files by reference, so the log stays under 15K tokens even with four agents.</p>
+        </div>
+        <div class="part part--queue">
+          <h3>Task Queue</h3>
+          <p>Divides the work among agents, with no planner in charge. Any agent can add tasks or claim open ones at any time, and the first claim wins. Every task shows whether it is open, claimed, or done, and by whom, so each agent knows who is responsible for what and how much remains.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= RESULTS ============================= -->
+<section class="section" id="results">
+  <div class="wrap sec-grid">
+    <div class="sec-body">
+      <h2>Experiments</h2>
+      <div class="prose">
+        <p>We evaluate DeLM on four agentic coding benchmarks: Terminal-Bench 4.0, where agents share discovered environment state and failed attempts in live terminals; DeepSWE v1.1, where agents reuse each other's debugging progress on long-horizon software engineering tasks; SWE-bench Verified, where agents explore alternative root causes and fixes for real GitHub issues; and ProgramBench, where agents rebuild entire programs from scratch. We compare against Codex and Claude Code, with and without native subagents, AOrchestra, and, on SWE-bench Verified, mini-SWE-agent.</p>
+        <p>Because DeLM targets long-horizon tasks where coordination matters, we evaluate on a subset of long-running tasks from Terminal-Bench 4.0 and DeepSWE v1.1. We select tasks based on the wall-clock latency of Codex with GPT-6-Astra: for Terminal-Bench 4.0, we select 10 tasks with latency between 15 minutes and 1 hour; for DeepSWE v1.1, we select 10 tasks with latency of at least 10 minutes.</p>
+      </div>
+
+      <details class="tasklist">
+        <summary>Show the 10 selected tasks from each benchmark</summary>
+        <div class="tasklist-grid">
+          <div class="table-scroll">
+            <table class="tasks">
+              <thead><tr><th scope="col">Terminal-Bench 4.0</th><th scope="col">Codex Latency</th></tr></thead>
+              <tbody>
+                <tr><td><code>ks-solver-cpp</code></td><td>21.00 min</td></tr>
+                <tr><td><code>telecom-entity-resolution</code></td><td>24.23 min</td></tr>
+                <tr><td><code>vf2-speedup-networkx</code></td><td>23.42 min</td></tr>
+                <tr><td><code>biped-contact-dynamics</code></td><td>21.56 min</td></tr>
+                <tr><td><code>cumulative-layout-shift</code></td><td>39.34 min</td></tr>
+                <tr><td><code>retro-console-soc</code></td><td>27.28 min</td></tr>
+                <tr><td><code>rs-archive-clone</code></td><td>21.92 min</td></tr>
+                <tr><td><code>wdm-design</code></td><td>39.27 min</td></tr>
+                <tr><td><code>lake-temp-glm</code></td><td>32.40 min</td></tr>
+                <tr><td><code>payments-pipeline-fix</code></td><td>18.67 min</td></tr>
+                <tr class="avg"><th scope="row">Average</th><td>26.91 min</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-scroll">
+            <table class="tasks">
+              <thead><tr><th scope="col">DeepSWE v1.1</th><th scope="col">Codex Latency</th></tr></thead>
+              <tbody>
+                <tr><td><code>oxvg-structural-selector-preservation</code></td><td>19.71 min</td></tr>
+                <tr><td><code>wasmi-trap-coredumps</code></td><td>14.55 min</td></tr>
+                <tr><td><code>happy-dom-abort-pending-body-reads</code></td><td>12.52 min</td></tr>
+                <tr><td><code>scriggo-method-declarations</code></td><td>17.35 min</td></tr>
+                <tr><td><code>dynamodb-toolbox-lazy-recursive-schemas</code></td><td>22.19 min</td></tr>
+                <tr><td><code>dynamodb-toolbox-conditional-attribute</code></td><td>16.78 min</td></tr>
+                <tr><td><code>opa-template-string-reconstruction</code></td><td>13.99 min</td></tr>
+                <tr><td><code>boa-hierarchical-evaluation-cancellation</code></td><td>13.28 min</td></tr>
+                <tr><td><code>numba-stencil-boundary-modes</code></td><td>15.91 min</td></tr>
+                <tr><td><code>pebble-durability-wait-apis</code></td><td>19.38 min</td></tr>
+                <tr class="avg"><th scope="row">Average</th><td>16.57 min</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <p class="table-note">Selected tasks from Terminal-Bench 4.0 and DeepSWE v1.1. Baseline latency is the average execution time of the Codex baseline using GPT-6-Astra at xhigh reasoning effort.</p>
+      </details>
+
+      <div class="tabs" role="tablist" aria-label="Benchmark">
+        <button class="tab" role="tab" id="tab-tb" aria-controls="panel-tb" aria-selected="true" type="button">Terminal-Bench 4.0</button>
+        <button class="tab" role="tab" id="tab-ds" aria-controls="panel-ds" aria-selected="false" type="button">DeepSWE v1.1</button>
+        <button class="tab" role="tab" id="tab-swe" aria-controls="panel-swe" aria-selected="false" type="button">SWE-bench Verified</button>
+      </div>
+
+      <div>
+        <div class="panel" role="tabpanel" id="panel-tb" aria-labelledby="tab-tb">
+          <h3>Terminal-Bench 4.0</h3>
+          <div class="table-scroll"><table class="results">
+<caption>Comparison on 10 long-horizon tasks from Terminal-Bench 4.0 across two base models. Best mean values within each model are bolded.</caption>
+<thead><tr><th scope="col">Method</th><th scope="col">Avg. Acc (%)</th><th scope="col">Avg. Latency</th><th scope="col">Speedup</th><th scope="col">Cost/Task</th><th scope="col">Cost/Submission</th></tr></thead>
+<tbody><tr class="group"><th colspan="6" scope="colgroup">GPT-6-Astra</th></tr>
+<tr><th scope="row">Codex</th><td class="acc"><span class="num">71.67 <span class="sd">±11.55</span></span><span class="bar" aria-hidden="true"><i style="width:71.67%"></i></span></td><td>26.91 <span class="sd">±0.91</span> <span class="unit">min</span></td><td><span class="sp flat">1.00×</span></td><td><b>$9.01</b> <span class="sd">±0.71</span></td><td>$9.01 <span class="sd">±0.71</span></td></tr>
+<tr><th scope="row">Codex (subagent)</th><td class="acc"><span class="num">71.67 <span class="sd">±11.69</span></span><span class="bar" aria-hidden="true"><i style="width:71.67%"></i></span></td><td>20.04 <span class="sd">±1.94</span> <span class="unit">min</span></td><td><span class="sp up">1.34×</span></td><td>$25.80 <span class="sd">±2.21</span></td><td>$25.80 <span class="sd">±2.21</span></td></tr>
+<tr><th scope="row">AOrchestra</th><td class="acc"><span class="num">70.00 <span class="sd">±5.00</span></span><span class="bar" aria-hidden="true"><i style="width:70.00%"></i></span></td><td>25.78 <span class="sd">±1.15</span> <span class="unit">min</span></td><td><span class="sp up">1.04×</span></td><td>$11.94 <span class="sd">±1.02</span></td><td>$11.94 <span class="sd">±1.02</span></td></tr>
+<tr class="delm"><th scope="row">DeLM (<i>n</i>&nbsp;=&nbsp;2)</th><td class="acc"><span class="num"><b>85.00</b> <span class="sd">±13.23</span></span><span class="bar" aria-hidden="true"><i style="width:85.00%"></i></span></td><td>17.47 <span class="sd">±1.82</span> <span class="unit">min</span></td><td><span class="sp up">1.54×</span></td><td>$13.65 <span class="sd">±1.49</span></td><td>$6.83 <span class="sd">±0.74</span></td></tr>
+<tr class="delm"><th scope="row">DeLM (<i>n</i>&nbsp;=&nbsp;4)</th><td class="acc"><span class="num">81.67 <span class="sd">±12.33</span></span><span class="bar" aria-hidden="true"><i style="width:81.67%"></i></span></td><td><b>13.16</b> <span class="sd">±1.43</span> <span class="unit">min</span></td><td><span class="sp up">2.05×</span></td><td>$23.90 <span class="sd">±2.27</span></td><td><b>$5.97</b> <span class="sd">±0.57</span></td></tr>
+</tbody>
+<tbody><tr class="group"><th colspan="6" scope="colgroup">Claude Opus 5.5</th></tr>
+<tr><th scope="row">Claude Code</th><td class="acc"><span class="num">81.67 <span class="sd">±2.89</span></span><span class="bar" aria-hidden="true"><i style="width:81.67%"></i></span></td><td>130.75 <span class="sd">±6.27</span> <span class="unit">min</span></td><td><span class="sp flat">1.00×</span></td><td>$20.31 <span class="sd">±0.23</span></td><td>$20.31 <span class="sd">±0.23</span></td></tr>
+<tr><th scope="row">Claude Code (subagent)</th><td class="acc"><span class="num">80.00 <span class="sd">±5.00</span></span><span class="bar" aria-hidden="true"><i style="width:80.00%"></i></span></td><td>138.58 <span class="sd">±10.17</span> <span class="unit">min</span></td><td><span class="sp down">0.94×</span></td><td>$30.88 <span class="sd">±3.17</span></td><td>$30.88 <span class="sd">±3.17</span></td></tr>
+<tr><th scope="row">AOrchestra</th><td class="acc"><span class="num">76.67 <span class="sd">±5.77</span></span><span class="bar" aria-hidden="true"><i style="width:76.67%"></i></span></td><td>157.21 <span class="sd">±9.03</span> <span class="unit">min</span></td><td><span class="sp down">0.83×</span></td><td>$24.22 <span class="sd">±1.05</span></td><td>$24.22 <span class="sd">±1.05</span></td></tr>
+<tr class="delm"><th scope="row">DeLM (<i>n</i>&nbsp;=&nbsp;2)</th><td class="acc"><span class="num"><b>93.33</b> <span class="sd">±3.33</span></span><span class="bar" aria-hidden="true"><i style="width:93.33%"></i></span></td><td>64.77 <span class="sd">±5.03</span> <span class="unit">min</span></td><td><span class="sp up">2.02×</span></td><td><b>$17.91</b> <span class="sd">±1.17</span></td><td>$8.96 <span class="sd">±0.59</span></td></tr>
+<tr class="delm"><th scope="row">DeLM (<i>n</i>&nbsp;=&nbsp;4)</th><td class="acc"><span class="num">89.17 <span class="sd">±5.20</span></span><span class="bar" aria-hidden="true"><i style="width:89.17%"></i></span></td><td><b>52.51</b> <span class="sd">±4.43</span> <span class="unit">min</span></td><td><span class="sp up">2.49×</span></td><td>$29.98 <span class="sd">±0.91</span></td><td><b>$7.50</b> <span class="sd">±0.23</span></td></tr>
+</tbody>
+</table></div>
+        </div>
+
+        <div class="panel" role="tabpanel" id="panel-ds" aria-labelledby="tab-ds">
+          <h3>DeepSWE v1.1</h3>
+          <div class="table-scroll"><table class="results">
+<caption>Comparison on 10 long-horizon tasks from DeepSWE v1.1 across two base models. Best mean values within each model are bolded.</caption>
+<thead><tr><th scope="col">Method</th><th scope="col">Avg. Acc (%)</th><th scope="col">Avg. Latency</th><th scope="col">Speedup</th><th scope="col">Cost/Task</th><th scope="col">Cost/Submission</th></tr></thead>
+<tbody><tr class="group"><th colspan="6" scope="colgroup">GPT-6-Astra</th></tr>
+<tr><th scope="row">Codex</th><td class="acc"><span class="num">88.33 <span class="sd">±2.89</span></span><span class="bar" aria-hidden="true"><i style="width:88.33%"></i></span></td><td>16.57 <span class="sd">±0.39</span> <span class="unit">min</span></td><td><span class="sp flat">1.00×</span></td><td><b>$9.40</b> <span class="sd">±0.18</span></td><td>$9.40 <span class="sd">±0.18</span></td></tr>
+<tr><th scope="row">Codex (subagent)</th><td class="acc"><span class="num">90.00 <span class="sd">±0.00</span></span><span class="bar" aria-hidden="true"><i style="width:90.00%"></i></span></td><td>15.76 <span class="sd">±2.05</span> <span class="unit">min</span></td><td><span class="sp up">1.05×</span></td><td>$24.97 <span class="sd">±3.15</span></td><td>$24.97 <span class="sd">±3.15</span></td></tr>
+<tr><th scope="row">AOrchestra</th><td class="acc"><span class="num">83.33 <span class="sd">±7.64</span></span><span class="bar" aria-hidden="true"><i style="width:83.33%"></i></span></td><td>18.31 <span class="sd">±1.08</span> <span class="unit">min</span></td><td><span class="sp down">0.91×</span></td><td>$10.74 <span class="sd">±0.97</span></td><td>$10.74 <span class="sd">±0.97</span></td></tr>
+<tr class="delm"><th scope="row">DeLM (<i>n</i>&nbsp;=&nbsp;2)</th><td class="acc"><span class="num"><b>98.33</b> <span class="sd">±2.89</span></span><span class="bar" aria-hidden="true"><i style="width:98.33%"></i></span></td><td>13.29 <span class="sd">±0.98</span> <span class="unit">min</span></td><td><span class="sp up">1.25×</span></td><td>$16.83 <span class="sd">±1.65</span></td><td>$8.42 <span class="sd">±0.82</span></td></tr>
+<tr class="delm"><th scope="row">DeLM (<i>n</i>&nbsp;=&nbsp;4)</th><td class="acc"><span class="num">90.00 <span class="sd">±10.00</span></span><span class="bar" aria-hidden="true"><i style="width:90.00%"></i></span></td><td><b>12.37</b> <span class="sd">±0.66</span> <span class="unit">min</span></td><td><span class="sp up">1.34×</span></td><td>$30.87 <span class="sd">±1.09</span></td><td><b>$7.72</b> <span class="sd">±0.27</span></td></tr>
+</tbody>
+<tbody><tr class="group"><th colspan="6" scope="colgroup">Claude Opus 5.5</th></tr>
+<tr><th scope="row">Claude Code</th><td class="acc"><span class="num">71.67 <span class="sd">±2.89</span></span><span class="bar" aria-hidden="true"><i style="width:71.67%"></i></span></td><td>49.58 <span class="sd">±3.11</span> <span class="unit">min</span></td><td><span class="sp flat">1.00×</span></td><td>$12.01 <span class="sd">±0.60</span></td><td>$12.01 <span class="sd">±0.60</span></td></tr>
+<tr><th scope="row">Claude Code (subagent)</th><td class="acc"><span class="num">50.00 <span class="sd">±10.00</span></span><span class="bar" aria-hidden="true"><i style="width:50.00%"></i></span></td><td>57.46 <span class="sd">±2.16</span> <span class="unit">min</span></td><td><span class="sp down">0.86×</span></td><td>$19.83 <span class="sd">±0.99</span></td><td>$19.83 <span class="sd">±0.99</span></td></tr>
+<tr><th scope="row">AOrchestra</th><td class="acc"><span class="num">73.33 <span class="sd">±5.77</span></span><span class="bar" aria-hidden="true"><i style="width:73.33%"></i></span></td><td>47.32 <span class="sd">±2.86</span> <span class="unit">min</span></td><td><span class="sp up">1.05×</span></td><td>$12.11 <span class="sd">±0.52</span></td><td>$12.11 <span class="sd">±0.52</span></td></tr>
+<tr class="delm"><th scope="row">DeLM (<i>n</i>&nbsp;=&nbsp;2)</th><td class="acc"><span class="num">88.33 <span class="sd">±2.89</span></span><span class="bar" aria-hidden="true"><i style="width:88.33%"></i></span></td><td>32.98 <span class="sd">±2.47</span> <span class="unit">min</span></td><td><span class="sp up">1.50×</span></td><td><b>$11.89</b> <span class="sd">±0.53</span></td><td><b>$5.95</b> <span class="sd">±0.26</span></td></tr>
+<tr class="delm"><th scope="row">DeLM (<i>n</i>&nbsp;=&nbsp;4)</th><td class="acc"><span class="num"><b>90.83</b> <span class="sd">±8.78</span></span><span class="bar" aria-hidden="true"><i style="width:90.83%"></i></span></td><td><b>31.61</b> <span class="sd">±0.96</span> <span class="unit">min</span></td><td><span class="sp up">1.57×</span></td><td>$24.49 <span class="sd">±0.67</span></td><td>$6.12 <span class="sd">±0.17</span></td></tr>
+</tbody>
+</table></div>
+          <div class="prose"><p>With Claude Opus 5.5, the gains are larger: DeLM (<i>n</i> = 4) reaches 90.83%, 17.5 points above the strongest baseline, AOrchestra (73.33%), and runs 1.57× faster than Claude Code.</p></div>
+        </div>
+
+        <div class="panel" role="tabpanel" id="panel-swe" aria-labelledby="tab-swe">
+          <h3>SWE-bench Verified</h3>
+          <div class="table-scroll"><table class="results">
+<caption>Comparison on SWE-bench Verified with Gemini 3 Flash. Best mean values within each model are bolded.</caption>
+<thead><tr><th scope="col">Method</th><th scope="col">Avg. Acc (%)</th><th scope="col">Avg. Latency</th><th scope="col">Speedup</th><th scope="col">Cost/Task</th><th scope="col">Cost/Submission</th></tr></thead>
+<tbody><tr class="group"><th colspan="6" scope="colgroup">Gemini 3 Flash</th></tr>
+<tr><th scope="row">Claude Code</th><td class="acc"><span class="num">49.32 <span class="sd">±1.98</span></span><span class="bar" aria-hidden="true"><i style="width:49.32%"></i></span></td><td>129.13 <span class="sd">±5.12</span> <span class="unit">s</span></td><td><span class="sp flat">1.00×</span></td><td>$1.00<sup>a</sup> <span class="sd">±0.00</span></td><td>$1.00<sup>a</sup> <span class="sd">±0.00</span></td></tr>
+<tr><th scope="row">mini-SWE-agent</th><td class="acc"><span class="num">54.73 <span class="sd">±2.37</span></span><span class="bar" aria-hidden="true"><i style="width:54.73%"></i></span></td><td>91.78 <span class="sd">±3.53</span> <span class="unit">s</span></td><td><span class="sp up">1.41×</span></td><td>$0.26 <span class="sd">±0.07</span></td><td>$0.26 <span class="sd">±0.07</span></td></tr>
+<tr><th scope="row">AOrchestra</th><td class="acc"><span class="num">55.26 <span class="sd">±2.03</span></span><span class="bar" aria-hidden="true"><i style="width:55.26%"></i></span></td><td>89.94 <span class="sd">±3.07</span> <span class="unit">s</span></td><td><span class="sp up">1.44×</span></td><td><b>$0.24</b> <span class="sd">±0.04</span></td><td>$0.24 <span class="sd">±0.04</span></td></tr>
+<tr class="delm"><th scope="row">DeLM (<i>n</i>&nbsp;=&nbsp;2)</th><td class="acc"><span class="num">63.72 <span class="sd">±2.29</span></span><span class="bar" aria-hidden="true"><i style="width:63.72%"></i></span></td><td>71.86 <span class="sd">±2.88</span> <span class="unit">s</span></td><td><span class="sp up">1.80×</span></td><td><b>$0.24</b> <span class="sd">±0.05</span></td><td><b>$0.12</b> <span class="sd">±0.03</span></td></tr>
+<tr class="delm"><th scope="row">DeLM (<i>n</i>&nbsp;=&nbsp;4)</th><td class="acc"><span class="num"><b>66.08</b> <span class="sd">±1.86</span></span><span class="bar" aria-hidden="true"><i style="width:66.08%"></i></span></td><td><b>61.01</b> <span class="sd">±2.63</span> <span class="unit">s</span></td><td><span class="sp up">2.12×</span></td><td>$0.47 <span class="sd">±0.07</span></td><td><b>$0.12</b> <span class="sd">±0.02</span></td></tr>
+</tbody>
+</table></div>
+          <p class="table-note"><sup>a</sup> The Claude Code CLI sends <code>cache_control</code> blocks in the Anthropic API format, so cache reuse only works if the upstream provider honors those blocks. For Gemini-3-Flash the real cost without cache reuse is therefore around $1 per task.</p>
+          <div class="prose"><p>With <i>n</i> = 4, DeLM reaches 66.08% accuracy, 10.8 points higher than the strongest baseline, AOrchestra (55.26%).</p></div>
+        </div>
+      </div>
+
+      <div class="sub">
+        <h3>ProgramBench</h3>
+        <figure>
+          <div class="fig"><img src="website/programbench.png" width="1800" height="611" loading="lazy"
+              alt="Hidden-test pass rate over 120 minutes on the ctags and pandoc ProgramBench tasks. On ctags, Claude Code ends at 34.32%, DeLM with two agents at 41.05%, and DeLM with four agents at 53.28%. On pandoc they end at 30.09%, 38.26%, and 50.00%." /></div>
+          <figcaption><b>DeLM makes more progress within the same time budget.</b> Test pass rate over time on two ProgramBench tasks with Claude Opus 5.5 under a 120-minute budget. DeLM uses Claude Code as its per-agent harness. From 60 minutes onward, the curves stay ordered (<i>n</i> = 4 above <i>n</i> = 2 above Claude Code), so DeLM reaches any given pass rate sooner and ends the budget higher.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= TRACE ANALYSIS ============================= -->
+<section class="section" id="analysis">
+  <div class="wrap sec-grid">
+    <div class="sec-body">
+      <h2>Trace Analysis: How Does Decentralized Coordination Help?</h2>
+      <div class="sub">
+        <h3>Parallel subtask execution shortens the critical path</h3>
+      <figure>
+        <div class="fig"><img src="website/timeline.png" width="1800" height="925" loading="lazy"
+          alt="Execution timelines on the retro-console-soc task with GPT-6-Astra. A single agent builds CPU, graphics, and audio in sequence and finishes at 27.01 minutes. Two DeLM agents split graphics and system from CPU and audio and finish around 21 minutes. Four DeLM agents build system, graphics, CPU, and audio concurrently and finish around 7.5 minutes." /></div>
+        <figcaption><b>More agents build more components in parallel.</b> Execution timelines on Terminal-Bench 4.0's <code>retro-console-soc</code> task with GPT-6-Astra.</figcaption>
+      </figure>
+      <div class="prose">
+        <p>A single agent builds the CPU, graphics, and audio in sequence and finishes in 27.0 minutes. With <i>n</i> = 2, one agent builds the graphics and system components while its peer builds the CPU and then the audio, finishing in 20.9 minutes (1.29×). With <i>n</i> = 4, separate agents build the system, graphics, CPU, and audio concurrently, and the task finishes in 7.5 minutes (3.6×).</p>
+      </div>
+      </div>
+
+      <div class="sub">
+        <h3>Peer-status awareness avoids duplicate exploration</h3>
+      <div class="prose">
+        <p>DeLM exposes every agent's claims, status, and stated scope through the task queue and shared context, so an agent can notice an overlap while its search is still running and redirect. In one four-agent run, Agents 1 and 3 independently began tuning the same port widths and positions. Agent 1 then saw Agent 3's claim through the shared context:</p>
+      </div>
+      <div class="log">
+          <pre><span class="a">[agent-3/</span><span class="fact">FACT</span><span class="a">]</span> [...] I will tune only w_in,w_long,w_short,y_long,y_short [...]
+<span class="a">[agent-1/</span><span class="fact">FACT</span><span class="a">]</span> [...] applying the cavity artifact revealed agent-3 had just claimed
+    the same five-parameter port tuning. [...]
+<span class="a">[agent-1/</span><span class="exec">EXEC</span><span class="a">]</span> kill -TERM 770
+<span class="a">[agent-1/</span><span class="exec">EXEC</span><span class="a">]</span> python binary_refine.py [...]</pre>
+        </div>
+      <div class="prose">
+        <p>The agents resolve the overlap themselves, before either search finishes, without a main agent having to detect the duplication and re-plan.</p>
+      </div>
+      </div>
+
+      <div class="sub">
+        <h3>Stateful shared context enables reuse and correction</h3>
+      <div class="prose">
+        <p>Because updates and corrections are appended as new entries that reference revised files, rather than overwriting old ones, an agent can re-import a peer's updated work at any time. Across 720 agent trajectories on Terminal-Bench 4.0 and DeepSWE v1.1, agents imported shared files 5,237 times, and 80.3% of trajectories later imported a revised version of a file they had already imported. Because agents publish short summaries and attach files by reference, the shared context averages under 15K tokens at task completion.</p>
+      </div>
+      <div class="table-scroll">
+        <table class="results ctx">
+          <caption>Final shared-context size (thousands of tokens) and the cost of reading it as a percentage of total task cost.</caption>
+          <thead>
+            <tr><th></th><th></th><th colspan="2" scope="colgroup">Terminal-Bench 4.0</th><th colspan="2" scope="colgroup">DeepSWE v1.1</th></tr>
+            <tr><th scope="col">Model</th><th scope="col">Agents</th><th scope="col">Context (k)</th><th scope="col">Cost (%)</th><th scope="col">Context (k)</th><th scope="col">Cost (%)</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row" rowspan="2">GPT-6-Astra</th><td><i>n</i> = 2</td><td>7.31 <span class="sd">±0.42</span></td><td>9.17 <span class="sd">±0.38</span></td><td>7.54 <span class="sd">±0.21</span></td><td>7.71 <span class="sd">±0.18</span></td></tr>
+            <tr><td><i>n</i> = 4</td><td>12.88 <span class="sd">±0.97</span></td><td>17.68 <span class="sd">±0.25</span></td><td>13.03 <span class="sd">±0.96</span></td><td>14.56 <span class="sd">±0.37</span></td></tr>
+            <tr><th scope="row" rowspan="2">Claude Opus 5.5</th><td><i>n</i> = 2</td><td>6.62 <span class="sd">±0.34</span></td><td>1.92 <span class="sd">±0.11</span></td><td>4.67 <span class="sd">±0.11</span></td><td>1.69 <span class="sd">±0.06</span></td></tr>
+            <tr><td><i>n</i> = 4</td><td>14.48 <span class="sd">±0.47</span></td><td>3.66 <span class="sd">±0.29</span></td><td>10.43 <span class="sd">±0.53</span></td><td>3.04 <span class="sd">±0.23</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      </div>
     </div>
   </div>
 </section>
 
 <!-- ============================= CITATION ============================= -->
-<section class="section section--cite">
-  <div class="wrap reveal">
-    <div class="section-head">
-      <span class="eyebrow">Cite this work</span>
+<section class="section" id="cite">
+  <div class="wrap sec-grid">
+    <div class="sec-body">
       <h2>BibTeX</h2>
-    </div>
-
-    <div class="cite-card">
-      <div class="cite-bar">
-        <span class="label"><span class="dotrow"><i></i><i></i><i></i></span> citation.bib</span>
-        <button class="copy-btn" id="copyBtn" type="button" aria-label="Copy BibTeX to clipboard">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span id="copyLabel">Copy</span>
-        </button>
-      </div>
-<pre class="bibtex" id="bibtex"><span class="t">@misc</span>{<span class="k">mao2026delm</span>,
-      <span class="k">title</span>={<span class="v">Decentralized Multi-Agent Systems with Shared Context</span>}, 
-      <span class="k">author</span>={<span class="v">Yuzhen Mao and Azalia Mirhoseini</span>},
-      <span class="k">year</span>={<span class="v">2026</span>},
-      <span class="k">eprint</span>={<span class="v">2606.10662</span>},
-      <span class="k">archivePrefix</span>={<span class="v">arXiv</span>},
-      <span class="k">primaryClass</span>={<span class="v">cs.MA</span>},
-      <span class="k">url</span>={<span class="v">https://arxiv.org/abs/2606.10662</span>}, 
+      <div class="cite">
+        <div class="cite-bar">
+          <span>citation.bib</span>
+          <button class="btn btn--sm copy-btn" id="copyBtn" type="button"><span id="copyLabel">Copy</span></button>
+        </div>
+<pre id="bibtex">@misc{mao2026delm,
+  title         = {Decentralized Multi-Agent Systems with Shared Context},
+  author        = {Yuzhen Mao and Jerry Gu and Aadi Chauhan and
+                   Qizheng Zhang and Hangoo Kang and Azalia Mirhoseini},
+  year          = {2026},
+  eprint        = {2606.10662},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.MA},
+  url           = {https://arxiv.org/abs/2606.10662}
 }</pre>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- ============================= FOOTER ============================= -->
 <footer class="footer">
   <div class="wrap">
-    <div class="flinks">
-      <a href="https://arxiv.org/abs/2606.10662" target="_blank" rel="noopener">Paper</a>
-      <a href="https://github.com/yuzhenmao/DeLM" target="_blank" rel="noopener">Code</a>
-      <a href="#" id="footBib">BibTeX</a>
-    </div>
+    <span>DeLM · Stanford University</span>
+    <span><a href="https://arxiv.org/abs/2606.10662" target="_blank" rel="noopener">Paper</a> · <a href="https://github.com/yuzhenmao/DeLM" target="_blank" rel="noopener">Code</a> · <a href="#top">Back to top</a></span>
   </div>
   <div class="footer-rule" aria-hidden="true"><span></span><span></span><span></span></div>
 </footer>
@@ -408,42 +787,57 @@
     const btn = document.getElementById('copyBtn');
     const label = document.getElementById('copyLabel');
     const pre = document.getElementById('bibtex');
-    function doCopy(){
-      const text = pre.innerText;
+    btn.addEventListener('click', function(){
+      const text = pre.textContent;
       const done = () => {
-        btn.classList.add('copied');
-        label.textContent = 'Copied!';
+        btn.classList.add('copied'); label.textContent = 'Copied';
         setTimeout(() => { btn.classList.remove('copied'); label.textContent = 'Copy'; }, 1800);
+      };
+      const fallback = () => {
+        const r = document.createRange(); r.selectNodeContents(pre);
+        const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        try { if (document.execCommand('copy')) done(); } catch(e){}
       };
       if (navigator.clipboard && navigator.clipboard.writeText){
         navigator.clipboard.writeText(text).then(done).catch(fallback);
       } else { fallback(); }
-      function fallback(){
-        const ta = document.createElement('textarea');
-        ta.value = text; document.body.appendChild(ta); ta.select();
-        try { document.execCommand('copy'); done(); } catch(e){}
-        document.body.removeChild(ta);
-      }
-    }
-    btn.addEventListener('click', doCopy);
-    document.getElementById('footBib').addEventListener('click', function(e){
-      e.preventDefault();
-      document.querySelector('.section--cite').scrollIntoView({behavior:'smooth'});
-      doCopy();
     });
   })();
 
-  // ----- reveal on scroll (respects reduced motion) -----
+  // ----- results tabs (all panels stay visible when JS is off) -----
   (function(){
-    const els = document.querySelectorAll('.reveal');
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce || !('IntersectionObserver' in window)){
-      els.forEach(el => el.classList.add('is-in')); return;
+    const tabs = Array.from(document.querySelectorAll('.tab'));
+    function select(tab, focus){
+      tabs.forEach(t => {
+        const on = t === tab;
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+        t.tabIndex = on ? 0 : -1;
+        document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+      });
+      if (focus) tab.focus();
     }
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach(en => { if (en.isIntersecting){ en.target.classList.add('is-in'); io.unobserve(en.target); } });
-    }, {threshold:.12, rootMargin:'0px 0px -8% 0px'});
-    els.forEach(el => io.observe(el));
+    tabs.forEach((t, i) => {
+      t.addEventListener('click', () => select(t, false));
+      t.addEventListener('keydown', e => {
+        if (e.key === 'ArrowRight') select(tabs[(i + 1) % tabs.length], true);
+        if (e.key === 'ArrowLeft') select(tabs[(i - 1 + tabs.length) % tabs.length], true);
+      });
+    });
+    select(tabs[0], false);
+  })();
+  // ----- side table of contents: highlight the section in view -----
+  (function(){
+    const links = Array.from(document.querySelectorAll('.toc a'));
+    const secs = links.map(a => document.getElementById(a.getAttribute('href').slice(1)));
+    function update(){
+      const y = window.scrollY + window.innerHeight * 0.35;
+      let cur = -1;
+      secs.forEach((sec, i) => { if (sec && sec.getBoundingClientRect().top + window.scrollY <= y) cur = i; });
+      links.forEach((a, i) => a.classList.toggle('active', i === cur));
+    }
+    window.addEventListener('scroll', update, {passive:true});
+    window.addEventListener('resize', update);
+    update();
   })();
 </script>
 </body>
