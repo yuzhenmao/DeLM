@@ -1,0 +1,72 @@
+--- a/agents/codex.py
++++ b/agents/codex.py
+@@ -467,9 +467,9 @@
+                 }
+             )
+             said = ""
+-            # A thread falls idle the moment it is opened, and that idle is still in the
+-            # stream when a turn starts reading. A turn has not ended until it has begun.
+-            begun = False
++            # Idle is a thread status, not the current turn's terminal result.
++            active_turn: str | None = None
++            finished = False
+             failed: str | None = None
+             before = Counter(self._counted.get(thread) or Counter())
+             costing = Usage()
+@@ -477,7 +477,10 @@
+             try:
+                 while (message := self._read()) is not None:
+                     if message.get("id") == ident and "method" not in message:
+-                        self._answer(message, said)
++                        reply = self._answer(message, said) or {}
++                        active_turn = (reply.get("turn") or {}).get("id") or active_turn
++                        running.turn = active_turn
++                        continue
+                     told: dict[str, Any] = message.get("params") or {}
+                     # One server holds every session of the agent, and a turn one of them
+                     # abandoned still says so on this stream. What is not this thread's is
+@@ -485,9 +488,12 @@
+                     if told.get("threadId") not in (None, thread):
+                         continue
+                     named_turn: dict[str, Any] = told.get("turn") or {}
+-                    if turn := told.get("turnId") or named_turn.get("id"):
+-                        running.turn = str(turn)
+-                        begun = True
++                    turn = told.get("turnId") or named_turn.get("id")
++                    if active_turn is None and message.get("method") == "turn/started":
++                        active_turn = str(turn) if turn else None
++                    if turn and str(turn) != active_turn:
++                        continue
++                    running.turn = active_turn
+                     match message.get("method"):
+                         case "item/started" | "item/completed":
+                             item: dict[str, Any] = told.get("item") or {}
+@@ -608,7 +614,10 @@
+                             failed = json.dumps(told.get("error"))
+                         case "turn/completed":
+                             turn_said = cast("dict[str, Any]", told.get("turn") or {})
+-                            if turn_said.get("status") not in (None, "completed"):
++                            if not active_turn or turn_said.get("id") != active_turn:
++                                continue
++                            finished = True
++                            if turn_said.get("status") != "completed":
+                                 # A failed or interrupted turn is complete even when the
+                                 # server does not follow it with a separate idle notification.
+                                 failed = json.dumps(
+@@ -618,14 +627,13 @@
+                             # Codex reports a reconnect attempt as an error notification even
+                             # when a later sampling request completes this same turn.
+                             failed = None
+-                        case "thread/status/changed" if (
+-                            begun and told["status"]["type"] == "idle"
+-                        ):
+                             break
+                         case _:  # the rest of the stream is not this turn's to show
+                             pass
+             finally:
+                 running.turn = None
++            if not finished:
++                raise Failed(1, self._argv, said, "App-server stream ended before turn/completed")
+             if failed is not None:
+                 raise Failed(1, self._argv, said, failed)
+             # What the turn cost is the rise across it, charged to the model it ran on: the
