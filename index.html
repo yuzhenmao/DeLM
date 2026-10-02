@@ -128,6 +128,8 @@
   .pills{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;}
   .pills span{font-family:var(--mono);font-size:.8rem;padding:6px 12px;border-radius:999px;border:1px solid var(--blue-line);background:rgba(255,255,255,.6);color:var(--blue-deep);}
   .overview-fig{margin-top:32px;}
+  .overview-fig .fig + .fig{margin-top:16px;}
+  .fig.fig--slide{padding:0;overflow:hidden;}  /* the charts carry their own margins and background */  /* matches the slides' own background */
   .overview-fig figcaption{max-width:none;}
   .overview-h{font-size:clamp(1.6rem,3.2vw,2.3rem);line-height:1.12;letter-spacing:-.022em;font-weight:700;margin-bottom:22px;}
   .sec-body > h2{max-width:none;}
@@ -177,6 +179,8 @@
   figure{margin:0;}
   .fig{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:clamp(12px,2.6vw,28px);}
   .fig img{margin-inline:auto;}
+  /* idea figure: smaller, and cropped above the two bottom captions baked into the image */
+  .fig--idea img{max-width:min(100%,720px);aspect-ratio:1800/700;object-fit:cover;object-position:top;}
   .fig--narrow img{max-width:min(100%,460px);}
   figcaption{margin-top:12px;font-size:.92rem;line-height:1.55;color:var(--ink-3);}
   figcaption b{color:var(--ink-2);font-weight:600;}
@@ -346,7 +350,7 @@
     .kind + .kind{border-top:1px solid var(--line);}
     th,td{padding:9px 12px;}
     .fig{overflow-x:auto;}
-    .fig:not(.fig--narrow) img{width:600px;max-width:none;}
+    .fig:not(.fig--narrow):not(.fig--idea) img{width:600px;max-width:none;}
   }
   @media (prefers-reduced-motion:reduce){
     html{scroll-behavior:auto;}
@@ -421,7 +425,7 @@
     <h2 class="overview-h">Overview</h2>
     <div class="video-wrap">
       <video controls poster="website/delm-promo-poster.png?v=f978823e" preload="metadata">
-        <source src="website/delm-decentralized-vs-centralized.mp4?v=f978823e" type="video/mp4" />
+        <source src="website/delm-decentralized-vs-centralized.mp4?v=2e9d8142" type="video/mp4" />
         Your browser does not support the video tag.
       </video>
     </div>
@@ -431,8 +435,10 @@
     </p>
 
     <figure class="overview-fig">
-      <div class="fig"><img src="website/teaser.png" width="1800" height="787"
-        alt="Two scatter plots of accuracy against speedup, for Terminal-Bench 4.0 and DeepSWE v1.1. DeLM points with two and four agents sit up and to the right of Codex, Claude Code, their native-subagent variants, and AOrchestra for both GPT-6-Astra and Claude Opus 5.5." /></div>
+      <div class="fig fig--slide"><img src="website/teaser-terminal-bench.png?v=2" width="1800" height="957"
+        alt="Accuracy against speedup on 10 selected long-horizon tasks from Terminal-Bench 4.0, headed up to 2.49× faster and 11.7 points more accurate. With Codex and GPT-6-Astra, DeLM with 2 agents is 1.54× faster and with 4 agents 2.05× faster, both above Codex, native subagents, and AOrchestra in accuracy. With Claude Code and Claude Opus 5.5, DeLM with 2 agents is 2.02× faster and with 4 agents 2.49× faster, both above Claude Code, native subagents, and AOrchestra." /></div>
+      <div class="fig fig--slide"><img src="website/teaser-deepswe.png?v=3" width="1800" height="957"
+        alt="Accuracy against speedup on 10 selected long-horizon tasks from DeepSWE v1.1, headed up to 1.57× faster and 17.5 points more accurate. With Codex and GPT-6-Astra, DeLM with 2 agents is 1.25× faster and with 4 agents 1.34× faster. With Claude Code and Claude Opus 5.5, DeLM with 2 agents is 1.50× faster and with 4 agents 1.57× faster, well above Claude Code, AOrchestra, and native subagents in accuracy." /></div>
       <figcaption>
         <b>DeLM is both faster and more accurate than existing multi-agent coding systems.</b> Averaged over the two models, DeLM (<i>n</i> = 2) is 1.78× faster and 12.5 points more accurate than Codex/Claude Code (dashed line, 1×) on Terminal-Bench 4.0, and 1.38× faster and 13.3 points more accurate on DeepSWE v1.1. Each benchmark uses 10 long-horizon tasks.
       </figcaption>
@@ -470,7 +476,7 @@
     <div class="sec-body">
       <h2>Replace the main agent with a shared context and a task queue</h2>
       <figure>
-        <div class="fig"><img src="website/first.png" width="1800" height="806" loading="lazy"
+        <div class="fig fig--idea"><img src="website/first.png" width="1800" height="700" loading="lazy"
           alt="Left: a centralized system where one main agent reads and writes a global context, hands subtasks and subcontexts to sub-agents, and collects their returned results. Right: DeLM, where parallel agents read and write a shared context and a task queue directly." /></div>
         <figcaption><b>Centralized vs. decentralized multi-agent systems.</b> Centralized MAS relies on a main agent to assign subcontexts, spawn sub-agents, and integrate their results, so progress is shared mainly through the main agent and sub-agents remain unaware of one another's work. In contrast, DeLM decentralizes coordination through parallel agents, a shared context, and a task queue: agents asynchronously claim ready tasks, publish findings incrementally to a shared context, and build on or correct each other's progress without a main agent in the loop.</figcaption>
       </figure>
@@ -649,10 +655,10 @@
 <tr class="delm"><th scope="row">DeLM (<i>n</i>&nbsp;=&nbsp;4)</th><td class="acc"><span class="num">90.00 <span class="sd">±10.00</span></span><span class="bar" aria-hidden="true"><i style="width:90.00%"></i></span></td><td><b>12.37</b> <span class="sd">±0.66</span> <span class="unit">min</span></td><td><span class="sp up">1.34×</span></td><td>$30.87 <span class="sd">±1.09</span></td><td><b>$7.72</b> <span class="sd">±0.27</span></td></tr>
 </tbody>
 <tbody><tr class="group"><th colspan="6" scope="colgroup">Claude Opus 5.5</th></tr>
-<tr><th scope="row">Claude Code</th><td class="acc"><span class="num">71.67 <span class="sd">±2.89</span></span><span class="bar" aria-hidden="true"><i style="width:71.67%"></i></span></td><td>49.58 <span class="sd">±3.11</span> <span class="unit">min</span></td><td><span class="sp flat">1.00×</span></td><td>$12.01 <span class="sd">±0.60</span></td><td>$12.01 <span class="sd">±0.60</span></td></tr>
+<tr><th scope="row">Claude Code</th><td class="acc"><span class="num">71.67 <span class="sd">±2.89</span></span><span class="bar" aria-hidden="true"><i style="width:71.67%"></i></span></td><td>49.58 <span class="sd">±3.11</span> <span class="unit">min</span></td><td><span class="sp flat">1.00×</span></td><td><b>$12.01</b> <span class="sd">±0.60</span></td><td>$12.01 <span class="sd">±0.60</span></td></tr>
 <tr><th scope="row">Claude Code (subagent)</th><td class="acc"><span class="num">50.00 <span class="sd">±10.00</span></span><span class="bar" aria-hidden="true"><i style="width:50.00%"></i></span></td><td>57.46 <span class="sd">±2.16</span> <span class="unit">min</span></td><td><span class="sp down">0.86×</span></td><td>$19.83 <span class="sd">±0.99</span></td><td>$19.83 <span class="sd">±0.99</span></td></tr>
 <tr><th scope="row">AOrchestra</th><td class="acc"><span class="num">73.33 <span class="sd">±5.77</span></span><span class="bar" aria-hidden="true"><i style="width:73.33%"></i></span></td><td>47.32 <span class="sd">±2.86</span> <span class="unit">min</span></td><td><span class="sp up">1.05×</span></td><td>$12.11 <span class="sd">±0.52</span></td><td>$12.11 <span class="sd">±0.52</span></td></tr>
-<tr class="delm"><th scope="row">DeLM (<i>n</i>&nbsp;=&nbsp;2)</th><td class="acc"><span class="num">88.33 <span class="sd">±2.89</span></span><span class="bar" aria-hidden="true"><i style="width:88.33%"></i></span></td><td>32.98 <span class="sd">±2.47</span> <span class="unit">min</span></td><td><span class="sp up">1.50×</span></td><td><b>$11.89</b> <span class="sd">±0.53</span></td><td><b>$5.95</b> <span class="sd">±0.26</span></td></tr>
+<tr class="delm"><th scope="row">DeLM (<i>n</i>&nbsp;=&nbsp;2)</th><td class="acc"><span class="num">88.33 <span class="sd">±2.89</span></span><span class="bar" aria-hidden="true"><i style="width:88.33%"></i></span></td><td>32.98 <span class="sd">±2.47</span> <span class="unit">min</span></td><td><span class="sp up">1.50×</span></td><td>$12.15 <span class="sd">±0.57</span></td><td><b>$6.07</b> <span class="sd">±0.28</span></td></tr>
 <tr class="delm"><th scope="row">DeLM (<i>n</i>&nbsp;=&nbsp;4)</th><td class="acc"><span class="num"><b>90.83</b> <span class="sd">±8.78</span></span><span class="bar" aria-hidden="true"><i style="width:90.83%"></i></span></td><td><b>31.61</b> <span class="sd">±0.96</span> <span class="unit">min</span></td><td><span class="sp up">1.57×</span></td><td>$24.49 <span class="sd">±0.67</span></td><td>$6.12 <span class="sd">±0.17</span></td></tr>
 </tbody>
 </table></div>

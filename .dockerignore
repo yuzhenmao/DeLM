@@ -1,0 +1,17 @@
+.git
+.local
+evidence
+tasks
+**/.local
+**/__pycache__
+**/*.pyc
+**/*.zip*
+**/*.tar*
+**/*.jsonl
+.env*
+**/auth.json
+**/.credentials.json
+**/*api-key*
+**/*.key
+**/*.pem
+.ruff_cache

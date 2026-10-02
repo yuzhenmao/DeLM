@@ -1,0 +1,29 @@
+# Independent Claude runtime for either worker count, on the official task image.
+ARG TASK_IMAGE=python:3.12-slim-bookworm
+FROM node:22-bookworm-slim AS cli
+ARG CLI_VERSION
+RUN test -n "$CLI_VERSION" && npm install -g @anthropic-ai/claude-code@${CLI_VERSION} \
+    && test "$(claude --version | cut -d ' ' -f 1)" = "$CLI_VERSION"
+
+FROM python:3.12-slim-bookworm AS runtime
+ARG DRIVER_REVISION
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN test -n "$DRIVER_REVISION" && pip install --no-cache-dir git+https://github.com/humanfia/humanize.git@${DRIVER_REVISION}
+COPY --from=cli /usr/local/bin/node /usr/local/bin/node
+COPY --from=cli /usr/local/lib/node_modules/@anthropic-ai /usr/local/lib/node_modules/@anthropic-ai
+RUN ln -s /usr/local/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe /usr/local/bin/claude \
+    && claude --version
+
+FROM ${TASK_IMAGE} AS task
+ARG CLI_VERSION
+USER root
+# Keep the task's Python and libraries intact; isolate the agent runtime in /opt.
+COPY --from=runtime /usr/local /opt/native
+COPY --from=runtime /etc/ssl/certs/ca-certificates.crt /opt/native/share/ca-certificates.crt
+COPY --from=runtime /usr/lib/*-linux-gnu/libssl.so.3 /usr/lib/*-linux-gnu/libcrypto.so.3 /usr/lib/*-linux-gnu/libffi.so.* /usr/lib/*-linux-gnu/liblzma.so.* /usr/lib/*-linux-gnu/libsqlite3.so.* /opt/native/lib/
+RUN mkdir -p /opt/agent-bin \
+    && ln -s /opt/native/bin/node /opt/agent-bin/node \
+    && ln -s /opt/native/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe /opt/agent-bin/claude \
+    && test "$(/opt/agent-bin/claude --version | cut -d ' ' -f 1)" = "$CLI_VERSION"
+RUN LD_LIBRARY_PATH=/opt/native/lib /opt/native/bin/python3.12 -c 'import hmz; import pydantic; import ssl; assert ssl.create_default_context(cafile="/opt/native/share/ca-certificates.crt").get_ca_certs()'

@@ -1,0 +1,19 @@
+ARG TASK_IMAGE=python:3.12-slim-bookworm
+FROM python:3.12-slim-bookworm AS runtime
+ARG CLI_VERSION
+ARG DRIVER_REVISION
+RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm git ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN test -n "$CLI_VERSION" && npm install -g @openai/codex@${CLI_VERSION}
+RUN test -n "$DRIVER_REVISION" && pip install --no-cache-dir git+https://github.com/humanfia/humanize.git@${DRIVER_REVISION}
+WORKDIR /workspace
+
+FROM ${TASK_IMAGE} AS task
+ARG CLI_VERSION
+USER root
+COPY --from=runtime /usr/local /opt/native
+COPY --from=runtime /etc/ssl/certs/ca-certificates.crt /opt/native/share/ca-certificates.crt
+COPY --from=runtime /usr/lib/*-linux-gnu/libssl.so.3 /usr/lib/*-linux-gnu/libcrypto.so.3 /usr/lib/*-linux-gnu/libffi.so.* /usr/lib/*-linux-gnu/liblzma.so.* /usr/lib/*-linux-gnu/libsqlite3.so.* /opt/native/lib/
+RUN binary=$(find /opt/native/lib/node_modules/@openai/codex -type f -path '*/bin/codex'); \
+    test -n "$binary" && mkdir -p /opt/agent-bin && ln -s "$binary" /opt/agent-bin/codex
+RUN LD_LIBRARY_PATH=/opt/native/lib /opt/native/bin/python3.12 -c 'import hmz; import pydantic; import ssl; assert ssl.create_default_context(cafile="/opt/native/share/ca-certificates.crt").get_ca_certs()' \
+    && test "$(/opt/agent-bin/codex --version)" = "codex-cli ${CLI_VERSION}"

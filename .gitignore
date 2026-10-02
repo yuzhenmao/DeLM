@@ -1,29 +1,38 @@
-# Environment & secrets
-.env
-
-# Personal config (contains API keys)
-config/model_config.yaml
-config/global_config.yaml
-config/global_config2.yaml
-config/benchmarks/
-
-# Runtime output
+# Code-only repository: runtime data and credentials must stay local.
+.local/
+evidence/
+tasks/
+results/
+experimental-results/
+deepswe-results/
+trajectories/
 workspace/
-
-# Per-phase artifacts and journal — kept locally per machine
-# (PLAN.md: durable but gitignored, karpathy/autoresearch convention).
-# Anchored to repo root so the top-level results/ stays ignored without
-# capturing the source-tree `src/results/` package (R5).
-/results/
-
-# Python
+workspaces/
+records/
 __pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-dist/
-build/
-
-# OS
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+auth.json
+.credentials.json
+credentials.json
+*api-key*
+*.key
+*.pem
+*.sqlite*
+*.db
+*.jsonl
+*.log
+*.zip
+*.zip.*
+*.tar
+*.tar.*
+*.tgz
+*.gz
+*.pdf
+node_modules/
 .DS_Store
-Thumbs.db
+
+.ruff_cache/
