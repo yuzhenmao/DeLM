@@ -2,9 +2,11 @@ ARG TASK_IMAGE=python:3.12-slim-bookworm
 FROM python:3.12-slim-bookworm AS runtime
 ARG CLI_VERSION
 ARG DRIVER_REVISION
-RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm git ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm git ca-certificates patch && rm -rf /var/lib/apt/lists/*
 RUN test -n "$CLI_VERSION" && npm install -g @openai/codex@${CLI_VERSION}
 RUN test -n "$DRIVER_REVISION" && pip install --no-cache-dir git+https://github.com/humanfia/humanize.git@${DRIVER_REVISION}
+COPY runtime/humanize_codex.patch /tmp/humanize_codex.patch
+RUN patch --batch --fuzz=0 -d /usr/local/lib/python3.12/site-packages/hmz -p1 < /tmp/humanize_codex.patch && rm /tmp/humanize_codex.patch
 WORKDIR /workspace
 
 FROM ${TASK_IMAGE} AS task
