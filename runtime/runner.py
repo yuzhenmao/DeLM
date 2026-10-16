@@ -15,9 +15,12 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
 
-from runtime.config import DEFAULT_COUNT
-from runtime.delm_timing import require_number, task_start
+from runtime.config import DEFAULT_COUNT, PROTOCOLS
 from runtime.machine_lock import machine_lock
+from runtime.egress import RestrictedNetwork
+from benchmark.external_task import ExternalTask
+from reporting import review
+from reporting.metrics import summarize
 from runtime.containers import (OriginalFiles, board_address, collect_native_record,
                                 handler, watch)
 from benchmark.terminal_task import base_image_name, check_source, settings, verifier_image_name
@@ -28,10 +31,8 @@ from prompts.prompts_n4 import worker_prompt as prompt_n4
 from prompts.prompts_n2 import worker_prompt as prompt_n2
 from runtime import runtime_support as runtime
 
-# Startup protocol recorded for each worker count; delm.py accepts only these counts.
-PROTOCOLS = {2: "worker-planned", 4: "worker-planned-n4"}
 SERIES_FIELDS = ("commit", "source_sha256", "count", "model", "effort", "harness", "auth_mode",
-                 "runtime_version", "authentication", "driver_revision", "service_cpus", "service_memory_mb")
+                 "runtime_version", "authentication", "driver_revision", "service_cpus", "service_memory_mb", "timing_policy", "network_policy")
 
 
 def worker_prompt(instruction, actor, roster, workdir):
@@ -77,15 +78,17 @@ def capacity(limits, host_cpus, available_mb, service_cpus=0, service_memory_mb=
                 service_cpus_per_worker=service_cpus, service_memory_mb_per_worker=service_memory_mb)
 
 
-def preflight(task, auth, service_cpus, service_memory_mb, count=DEFAULT_COUNT, harness="codex"):
-    task_source = check_source(task)
-    limits = settings(task)
+def preflight(task, auth, service_cpus, service_memory_mb, count=DEFAULT_COUNT, harness="codex", external=None):
+    task_source = external.identity() if external else check_source(task)
+    limits = external.limits() if external else settings(task)
     environment = limits["environment"]
     if environment.get("gpus", 0) or environment.get("mcp_servers") or not environment.get("allow_internet", True):
         raise ValueError("This runner supports unrestricted CPU task environments without MCP servers")
-    if limits["verifier"].get("environment_mode") != "separate":
+    if external and (service_cpus or service_memory_mb):
+        raise ValueError("External tasks do not configure sidecar services")
+    if not external and limits["verifier"].get("environment_mode") != "separate":
         raise ValueError("A separate official grader is required")
-    if list((task / "environment").glob("*compose*")):
+    if not external and list((task / "environment").glob("*compose*")):
         from benchmark.task_compose import SERVICE_BUILDS, service_images
         if task.name not in SERVICE_BUILDS:
             raise ValueError("The task's supplied services are not supported")
@@ -107,60 +110,19 @@ def preflight(task, auth, service_cpus, service_memory_mb, count=DEFAULT_COUNT, 
     host["cpu_models"] = sorted({line.split(":", 1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines() if line.startswith("model name")})
     if shutil.disk_usage(ROOT).free < (count * environment["storage_mb"] + 4096) * 1024**2:
         raise RuntimeError("Insufficient free storage for all task workspaces and records")
-    image = inspect_image(runtime.task_image(task, harness))
-    base = inspect_image(base_image_name(task))
-    verifier = inspect_image(verifier_image_name(task))
-    for info in (base, image, verifier):
-        validate_source(info, task_source)
-    runtime.validate_overlay(image, base, harness)
-    limits["verifier"]["image_id"] = verifier["Id"]
-    workdir = image["Config"]["WorkingDir"]
+    image = inspect_image(external.config["image"] if external else runtime.task_image(task, harness))
+    verifier = None
+    if not external:
+        base = inspect_image(base_image_name(task))
+        verifier = inspect_image(verifier_image_name(task))
+        for info in (base, image, verifier):
+            validate_source(info, task_source)
+        runtime.validate_overlay(image, base, harness)
+        limits["verifier"]["image_id"] = verifier["Id"]
+    workdir = image["Config"].get("WorkingDir")
     if not workdir or workdir == "/":
         raise ValueError("Task image needs a non-root working directory")
     return task_source, limits, host, image, verifier
-
-
-def summarize(run):
-    """Report complete records only; failures retain times and usage."""
-    rows = run["workers"]
-    count = run["count"]
-    runtime.validate_records(run)
-    roster = [f"agent-{i}" for i in range(1, count + 1)]
-    if (run.get("startup_protocol") != PROTOCOLS[count] or len(rows) != count
-            or sorted(r.get("actor", "") for r in rows) != roster):
-        raise ValueError("Expected the declared distinct worker records")
-    if any(not row.get("completed") or row.get("process_returncode") != 0 for row in rows):
-        raise ValueError("Not all workers completed")
-    starts = [task_start(row, require_number(run, "started_ns")) for row in rows]
-    start = min(starts)
-    agents, totals = [], dict(input_tokens=0, cached_input_tokens=0, output_tokens=0, total_tokens=0)
-    for row, worker_start in zip(rows, starts):
-        finish = require_number(row, "agent_result_received_seconds")
-        if finish < worker_start or type(row.get("correct")) is not bool:
-            raise ValueError("Missing grade or inconsistent completion time")
-        if row.get("grading", {}).get("verifier_timeout") or row.get("usage_agrees") is not True:
-            raise ValueError("Incomplete grading or inconsistent usage")
-        for key in totals:
-            value = require_number(row["native_usage"], key)
-            if type(value) is not int:
-                raise ValueError("Token counts must be integers")
-            totals[key] += value
-        usage = row["native_usage"]
-        if usage["cached_input_tokens"] > usage["input_tokens"] or usage["total_tokens"] != usage["input_tokens"] + usage["output_tokens"]:
-            raise ValueError("Invalid native token accounting")
-        agents.append(dict(actor=row["actor"], execution_seconds=finish - start, correct=row["correct"]))
-    successful = [r["execution_seconds"] for r in agents if r["correct"]]
-    totals["uncached_input_tokens"] = totals["input_tokens"] - totals["cached_input_tokens"]
-    summary = dict(task=run["case"], count=count, model=run["model"], effort=run["effort"],
-                workers=agents, passing_workers=len(successful),
-                first_success_seconds=min(successful) if successful else None,
-                mean_worker_seconds=sum(r["execution_seconds"] for r in agents) / count,
-                last_worker_seconds=max(r["execution_seconds"] for r in agents), tokens=totals)
-    summary["harness"] = run["harness"]
-    if run["harness"] == "claude-code":
-        summary["cost_usd"] = sum(r["native_usage"]["cost_usd"] for r in rows)
-        totals["cache_creation_input_tokens"] = sum(r["native_usage"]["cache_creation_input_tokens"] for r in rows)
-    return summary
 
 
 def capture_and_grade(task, containers, rows, limits, workdir, save):
@@ -275,20 +237,27 @@ def check_series(runs, task, identity):
 
 
 @machine_lock()
-def run(task, model, effort, series, repeat, auth, service_cpus=0, service_memory_mb=0, count=DEFAULT_COUNT, harness="codex", auth_mode="api-key"):
+def run(task, model, effort, series, repeat, auth, service_cpus=0, service_memory_mb=0, count=DEFAULT_COUNT, harness="codex", auth_mode="api-key", task_config=None):
     """Run one repeat; delm.py validates the arguments before calling this."""
     authentication = ("chatgpt" if harness == "codex" else "claude-oauth") if auth_mode == "coding-plan" else "api-key"
     adapter = runtime.runtime(harness)
+    external = ExternalTask(task_config) if task_config else None
+    task_name = external.name if external else task.name
+    timing = external.config["timing"] if external else "per-worker"
+    network_policy = external.config["network"] if external else "unrestricted"
+    evaluator = external.config["evaluator"] if external else "official"
     commit, hashes = source_identity()
-    task_source, limits, host, image, verifier = preflight(task, auth, service_cpus, service_memory_mb, count, harness)
-    series_dir = ROOT / ".local" / "runs" / series / task.name
+    task_source, limits, host, image, verifier = preflight(task, auth, service_cpus, service_memory_mb, count, harness, external)
+    series_dir = ROOT / ".local" / "runs" / series / task_name
     identity = dict(commit=commit, source_sha256=hashes, task_source=task_source,
-                    image_id=image["Id"], verifier_image_id=verifier["Id"],
+                    image_id=image["Id"], verifier_image_id=verifier["Id"] if verifier else None,
                     service_image_ids=limits.get("service_image_ids", {}),
                     count=count, model=model, effort=effort, harness=harness, auth_mode=auth_mode,
                     runtime_version=adapter.VERSION, authentication=authentication, driver_revision=adapter.DRIVER_REVISION,
                     service_cpus=service_cpus, service_memory_mb=service_memory_mb)
-    check_series(series_dir.parent, task.name, identity)
+    identity.update(task_type="external" if external else "terminal-bench",
+                    evaluator=evaluator, timing_policy=timing, network_policy=network_policy)
+    check_series(series_dir.parent, task_name, identity)
     series_dir.mkdir(parents=True, exist_ok=True)
     if not (series_dir / "settings.json").exists():
         write_json(series_dir / "settings.json", identity)
@@ -299,7 +268,7 @@ def run(task, model, effort, series, repeat, auth, service_cpus=0, service_memor
     timeout = int(limits["agent"]["timeout_sec"])
     workdir = image["Config"]["WorkingDir"]
     image_path = next(v.split("=", 1)[1] for v in image["Config"]["Env"] if v.startswith("PATH="))
-    metadata = dict(**identity, case=task.name, repeat=repeat, series=series, mode=f"delm-n{count}",
+    metadata = dict(**identity, case=task_name, repeat=repeat, series=series, mode=f"delm-n{count}",
                     startup_protocol=PROTOCOLS[count], image_info=image, verifier_image_info=verifier,
                     task_settings=limits, host=host, timeout_seconds=timeout,
                     status="starting", phase="setup", agents=roster, workers=[],
@@ -308,29 +277,46 @@ def run(task, model, effort, series, repeat, auth, service_cpus=0, service_memor
         destination = folder / "framework-source" / source.relative_to(ROOT)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, destination)
+    if external:
+        external.snapshot(folder / "task-source")
     save = lambda: write_json(folder / "run.json", metadata)
     save()
     containers, processes = [], []
-    context = server = original = None
+    context = server = original = restricted = None
     started = time.monotonic_ns()
     metadata["started_ns"] = started
     try:
         original = create_original(image["Id"], workdir)
+        if external:
+            external.seed(original.name, folder / "task-source", workdir)
+        address = board_address()
+        if network_policy == "model-only":
+            restricted = RestrictedNetwork(harness)
+            address = restricted.start()
+            limits["network_name"] = restricted.name
         context = ProtectedBoard(folder / "context.sqlite", roster, original.fetch)
-        server = ThreadingHTTPServer((board_address(), 0), handler(context, actors))
+        server = ThreadingHTTPServer((address, 0), handler(context, actors))
         threading.Thread(target=server.serve_forever, daemon=True).start()
-        url = f"http://host.docker.internal:{server.server_port}"
+        url = f"http://{address if restricted else 'host.docker.internal'}:{server.server_port}"
         for token, actor in actors.items():
             worker_folder = folder / actor
             environment = dict(WORKER_NAME=actor, TASK_WORKSPACE=workdir, AGENT_MODEL=model,
                                AGENT_EFFORT=effort, AGENT_TIMEOUT_SECONDS=timeout, AGENT_AUTHENTICATION=authentication,
                                CONTEXT_URL=url, CONTEXT_TOKEN=token,
                                CONTEXT_PYTHON="/opt/native/bin/python3.12", CONTEXT_LIBRARY_PATH="/opt/native/lib")
+            environment["DELM_TIMING"] = timing
+            if restricted:
+                environment.update(restricted.environment())
             mounts = runtime.worker_mounts(harness, auth, authentication)
             container = create_container(image["Id"], worker_folder, limits, workdir, environment, mounts,
                                          harness=harness, authentication=authentication)
             containers.append(container)
-            (worker_folder / "prompt.txt").write_text(worker_prompt((task / "instruction.md").read_text(), actor, roster, workdir))
+            if external:
+                external.seed(container.name, folder / "task-source", workdir)
+            instruction = external.instruction if external else (task / "instruction.md").read_text()
+            prompt = (external.render(actor, roster, workdir) if external and external.prompt
+                      else worker_prompt(instruction, actor, roster, workdir))
+            (worker_folder / "prompt.txt").write_text(prompt)
             container.preflight(limits["environment"]["storage_mb"], url)
         metadata.update(status="running", phase="execution")
         save()
@@ -340,10 +326,23 @@ def run(task, model, effort, series, repeat, auth, service_cpus=0, service_memor
             watcher = threading.Thread(target=watch, args=(process, log, lifecycle, started, context, actor), daemon=True)
             processes.append((actor, container, process, log, watcher, lifecycle))
             watcher.start()
+        if timing == "synchronized":
+            ready_limit = time.monotonic() + 90
+            while not all("agent_ready_received_seconds" in p[-1] for p in processes):
+                if any(p.poll() is not None for _, _, p, _, _, _ in processes) or time.monotonic() >= ready_limit:
+                    raise RuntimeError("Worker preparation failed; no task released")
+                time.sleep(0.05)
+            metadata["release_ns"] = time.monotonic_ns()
+            metadata["deadline_ns"] = metadata["release_ns"] + timeout * 10**9
+            for container in containers:
+                write_json(container.folder / "release.json", {k: metadata[k] for k in ("release_ns", "deadline_ns")})
+            save()
         print(json.dumps(dict(event="launched", folder=str(folder), workers=roster)), flush=True)
         while any(p.poll() is None for _, _, p, _, _, _ in processes):
             for _, container, process, _, _, lifecycle in processes:
-                if process.poll() is None and (time.monotonic_ns() - started) / 1e9 > lifecycle["launch_seconds"] + timeout + 600:
+                limit = (metadata["deadline_ns"] + 30 * 10**9 if timing == "synchronized"
+                         else started + int((lifecycle["launch_seconds"] + timeout + 600) * 1e9))
+                if process.poll() is None and time.monotonic_ns() > limit:
                     stop_checked(container)
                     metadata["runner_timeout"] = True
             time.sleep(1)
@@ -364,7 +363,18 @@ def run(task, model, effort, series, repeat, auth, service_cpus=0, service_memor
             save()
         metadata["phase"] = "grading"
         save()
-        capture_and_grade(task, containers, metadata["workers"], limits, workdir, save)
+        if evaluator == "official":
+            capture_and_grade(task, containers, metadata["workers"], limits, workdir, save)
+        else:
+            for container, row in zip(containers, metadata["workers"]):
+                try:
+                    review.capture(container, row, workdir)
+                except Exception as error:
+                    row["grading_error"] = f"Capture failed: {type(error).__name__}: {error}"
+                save()
+            for container in containers:
+                stop_checked(container)
+            review.export(folder, instruction, external.rubric, metadata["workers"])
         metadata["status"] = "finished"
         errors = ("record_error", "result_record_error", "transport_record_error", "session_state_error", "grading_error", "shutdown_error")
         if any(any(row.get(key) for key in errors) or row.get("grading", {}).get("workspace_copy_error")
@@ -421,6 +431,8 @@ def run(task, model, effort, series, repeat, auth, service_cpus=0, service_memor
             cleanup("remove original container", original.remove)
         for container in containers:
             cleanup("remove worker environment", lambda c=container: remove_container(c))
+        if restricted:
+            cleanup("remove restricted network", restricted.close)
         if metadata["status"] != "finished":
             metadata.pop("summary", None)
         metadata.update(phase="finished", elapsed_seconds=(time.monotonic_ns() - started) / 1e9)

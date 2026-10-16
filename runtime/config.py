@@ -25,3 +25,5 @@ def check_driver():
     direct = json.loads(distribution("hmz").read_text("direct_url.json") or "{}")
     if direct.get("vcs_info", {}).get("commit_id") != DRIVER_REVISION:
         raise ValueError("Humanize does not match the pinned driver revision")
+
+PROTOCOLS = {2: "worker-planned", 4: "worker-planned-n4"}

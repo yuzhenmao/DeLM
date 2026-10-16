@@ -28,11 +28,13 @@ class LaunchPlan:
     record: str
     credential_file: str
     auth_mode: str = "api-key"
+    task_config: str | None = None
 
 
 def parser():
     result = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
-    result.add_argument("task", help="Fetched Terminal-Bench 4.0 task name")
+    result.add_argument("task", nargs="?", help="Fetched Terminal-Bench 4.0 task name")
+    result.add_argument("--task-config", type=Path, help="External task JSON (mutually exclusive with task name)")
     result.add_argument("--n", type=int, choices=(2, 4), default=DEFAULT_COUNT,
                         help=f"Number of DeLM workers / protocol variant (default: {DEFAULT_COUNT})")
     result.add_argument("--harness", choices=("codex", "claude-code"), default="codex")
@@ -56,8 +58,16 @@ def parser():
 
 def build_plan(args):
     """Validate the launch once; the runner relies on these checks."""
+    if bool(args.task) == bool(args.task_config):
+        raise ValueError("Supply either a Terminal-Bench task name or --task-config")
+    task_config = None
+    task_name = args.task
+    if args.task_config:
+        from benchmark.external_task import ExternalTask
+        task_config = str(args.task_config.expanduser().resolve())
+        task_name = ExternalTask(task_config).name
     if any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", name)
-           for name in (args.task, args.series)):
+           for name in (task_name, args.series)):
         raise ValueError("Use simple task and series names, not filesystem paths")
     if args.repeat < 1:
         raise ValueError("--repeat must be positive")
@@ -74,23 +84,24 @@ def build_plan(args):
     elif not args.api_key_file:
         raise ValueError("--auth-mode api-key requires --api-key-file")
     credential = (args.auth_file or args.api_key_file).expanduser().resolve()
-    folder = ROOT / ".local/runs" / args.series / args.task / f"repeat-{args.repeat}"
-    return LaunchPlan(args.task, args.series, args.repeat, args.n, args.harness, model, effort,
+    folder = ROOT / ".local/runs" / args.series / task_name / f"repeat-{args.repeat}"
+    return LaunchPlan(task_name, args.series, args.repeat, args.n, args.harness, model, effort,
                       args.service_cpus, args.service_memory_mb,
-                      str(folder / "run.json"), str(credential), args.auth_mode)
+                      str(folder / "run.json"), str(credential), args.auth_mode, task_config)
 
 
 def execute(plan):
     if sys.version_info < (3, 13):
         raise ValueError("Live runs require Python 3.13 or newer; --dry-run is available without launching")
     task = ROOT / "tasks/terminal-bench-4.0" / plan.task
-    if not (task / "task.toml").is_file():
+    if not plan.task_config and not (task / "task.toml").is_file():
         raise ValueError("Task not fetched; run fetch_task.py first")
     if Path(plan.record).parent.exists():
         raise ValueError("Repeat folder already exists; inspect it rather than overwriting or retrying it")
     from runtime.runner import run
     metadata = run(task, plan.model, plan.effort, plan.series, plan.repeat, Path(plan.credential_file),
-                   plan.service_cpus, plan.service_memory_mb, plan.n, plan.harness, plan.auth_mode)
+                   plan.service_cpus, plan.service_memory_mb, plan.n, plan.harness, plan.auth_mode,
+                   task_config=plan.task_config)
     if metadata["status"] != "finished":
         raise ValueError("Run is incomplete; records preserved, no automatic retry")
     return 0

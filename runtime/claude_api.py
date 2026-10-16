@@ -310,7 +310,8 @@ def main(records=Path("/records")):
                               service_tier="default", web_search=False, goals=False),
                               name=os.environ["WORKER_NAME"])
         session = session_class(agent, cwd=os.environ["TASK_WORKSPACE"])
-        timeout = float(os.environ["AGENT_TIMEOUT_SECONDS"])
+        from runtime.delm_timing import await_release
+        timeout = await_release()
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("Invalid official agent time limit")
         result["model_turn_start_seconds"] = elapsed()

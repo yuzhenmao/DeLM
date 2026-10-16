@@ -55,6 +55,7 @@ def worker_mounts(harness, key, authentication="api-key"):
     worker = ROOT / "runtime" / ("codex_api.py" if harness == "codex" else "claude_api.py")
     return [(ROOT / "runtime/__init__.py", "/tools/runtime/__init__.py"),
             (ROOT / "runtime/config.py", "/tools/runtime/config.py"),
+            (ROOT / "runtime/delm_timing.py", "/tools/runtime/delm_timing.py"),
             (worker, "/tools/worker.py"), (ROOT / "runtime/native_worker.py", "/tools/native_worker.py"),
             (ROOT / "board/context_client.py", "/tools/context_client.py"),
             (ROOT / "board/context.sh", "/tools/context.sh"), (key, credential_path)]
@@ -65,15 +66,30 @@ class WorkerContainer(Container):
         host = "api.openai.com" if self.harness == "codex" else "api.anthropic.com"
         if self.authentication == "chatgpt":
             host = "chatgpt.com"
+        connectivity = (
+            "tls=ssl.create_default_context(cafile='/opt/native/share/ca-certificates.crt'); "
+            f"s=tls.wrap_socket(socket.create_connection(({host!r},443),timeout=5),server_hostname={host!r}); s.close(); "
+        )
+        if self.restricted_network:
+            connectivity = (
+                "import http.client; from urllib.parse import urlsplit; "
+                "p=urlsplit(os.environ['HTTPS_PROXY']); "
+                "c=http.client.HTTPConnection(p.hostname,p.port,timeout=10); "
+                f"c.set_tunnel({host!r},443); c.connect(); "
+                "tls=ssl.create_default_context(cafile='/opt/native/share/ca-certificates.crt'); "
+                f"s=tls.wrap_socket(c.sock,server_hostname={host!r}); s.close(); "
+                "c=http.client.HTTPConnection(p.hostname,p.port,timeout=5); "
+                "c.request('CONNECT','example.org:443'); assert c.getresponse().status==403; c.close(); "
+                "probe=socket.socket(); probe.settimeout(2); "
+                "assert probe.connect_ex(('1.1.1.1',443)) != 0; probe.close(); "
+            )
         code = (
             "import json,os,shutil,socket,ssl,sys; from pathlib import Path; "
             "sys.path.insert(0,'/tools'); import worker; worker.clean_environment(os.environ); "
             "assert not Path('/tests').exists() and not Path('/solution').exists(); "
             f"assert shutil.disk_usage({self.workdir!r}).free >= {storage_mb}*1024*1024; "
             "runtime=worker.preflight(os.environ); "
-            "tls=ssl.create_default_context(cafile='/opt/native/share/ca-certificates.crt'); "
-            f"s=tls.wrap_socket(socket.create_connection(({host!r},443),timeout=5),server_hostname={host!r}); s.close(); "
-            "import urllib.request; "
+            + connectivity + "import urllib.request; "
             f"assert json.load(urllib.request.urlopen({context_url + '/health'!r},timeout=5))['ready']; "
             "print(json.dumps(runtime))"
         )
@@ -120,6 +136,7 @@ def collect_record(harness, container, row, model):
         usage = claude.collect_record(container.folder, container.authentication, model)
         row["usage_agrees"] = usage == row.get("native_usage") and sum(row.get("tokens", {}).values()) == usage["total_tokens"]
     row["native_usage"] = usage
+    row["usage_coverage"] = "complete" if row.get("completed") and not row.get("error") else "partial_or_unknown"
 
 
 def validate_records(run):

@@ -180,6 +180,7 @@ class Container:
         self.name = "delm-workspace-" + uuid.uuid4().hex[:12]
         self.folder = folder
         self.workdir = workdir
+        self.restricted_network = bool(limits.get("network_name"))
         environment = dict(environment)
         if limits['environment'].get('skills_dir'):
             environment['TASK_SKILLS_DIR'] = limits['environment']['skills_dir']
@@ -195,6 +196,8 @@ class Container:
                    "--cpus", str(limits["environment"]["cpus"]), "--memory", f'{limits["environment"]["memory_mb"]}m',
                    "--pids-limit", "512", "--add-host", "host.docker.internal:host-gateway",
                    "--mount", f"type=bind,src={folder},dst=/records"]
+        if limits.get("network_name"):
+            command += ["--network", limits["network_name"]]
         for source, target in mounts:
             command += ["--mount", f"type=bind,src={source},dst={target},readonly"]
         for key, value in environment.items():
@@ -230,7 +233,7 @@ def watch(process, log, lifecycle, started, context=None, actor=None):
                 notice = json.loads(line)
             except ValueError:
                 continue
-            if isinstance(notice, dict) and notice.get("event") in ("model_start", "result", "deadline"):
+            if isinstance(notice, dict) and notice.get("event") in ("ready", "model_start", "result", "deadline"):
                 key = f"agent_{notice['event']}_received_seconds"
                 lifecycle.setdefault(key, (time.monotonic_ns() - started) / 1e9)
     finally:

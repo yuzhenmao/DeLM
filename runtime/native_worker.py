@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 from runtime.config import check_authentication
+from runtime.delm_timing import await_release
 
 
 class AgentDeadline(Exception):
@@ -98,12 +99,12 @@ def main():
         Path("/records/skills.json").write_text(json.dumps(inventory, indent=2))
         check_skills(inventory, workspace, task_skills)
         session = agent.new(cwd=workspace)
+        remaining = await_release()
         result["model_turn_start_seconds"] = (time.monotonic_ns() - started) / 1e9
         print(json.dumps(notice("model_start", result["model_turn_start_seconds"], 0)), flush=True)
         def expired(signum, frame):
             raise AgentDeadline("Agent task time limit reached")
         signal.signal(signal.SIGALRM, expired)
-        remaining = float(os.environ["AGENT_TIMEOUT_SECONDS"])
         signal.setitimer(signal.ITIMER_REAL, max(0.001, remaining))
         with Path("/records/trajectory.jsonl").open("x") as output:
             for sequence, event in enumerate(session.stream(prompt), 1):

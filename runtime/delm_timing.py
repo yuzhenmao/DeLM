@@ -1,6 +1,10 @@
 """Convert worker timestamps to the shared run clock."""
 
 import math
+import json
+import os
+from pathlib import Path
+import time
 
 
 def require_number(record, key):
@@ -19,3 +23,21 @@ def task_start(record, run_started_ns):
     if start < 0:
         raise ValueError("Task start precedes the run clock")
     return start
+
+
+def await_release():
+    """Optional controller barrier; existing per-worker budgets remain the default."""
+    timeout = float(os.environ["AGENT_TIMEOUT_SECONDS"])
+    if os.environ.get("DELM_TIMING") != "synchronized":
+        return timeout
+    print(json.dumps({"event": "ready"}), flush=True)
+    path = Path("/records/release.json")
+    limit = time.monotonic() + 120
+    while not path.exists():
+        if time.monotonic() >= limit:
+            raise RuntimeError("Controller did not release prepared workers")
+        time.sleep(0.02)
+    remaining = (json.loads(path.read_text())["deadline_ns"] - time.monotonic_ns()) / 1e9
+    if remaining <= 0:
+        raise RuntimeError("Common deadline already elapsed")
+    return remaining

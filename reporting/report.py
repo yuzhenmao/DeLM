@@ -84,6 +84,8 @@ def run_report(folder):
              f"(N={cell(record.get('count'))}) — {cell(record.get('status'))}", "",
              f"Harness: {cell(record.get('harness'))}; model: {cell(record.get('model'))}; "
              f"effort: {cell(record.get('effort'))}; auth mode: {cell(record.get('auth_mode'))}.", ""]
+    lines.append(f"Timing policy: {cell(record.get('timing_policy', 'per-worker'))}; "
+                 f"evaluator: {cell(record.get('evaluator', 'official'))}.")
     if run.error:
         lines.append(f"Record unavailable: {cell(run.error)}")
     if summary:

@@ -384,3 +384,10 @@ task image require a new series. Existing attempts are never overwritten.
   url           = {https://arxiv.org/abs/2606.10662}
 }
 ```
+
+## External tasks (including math)
+
+Use the same launcher, workers and board with `--task-config /path/to/task.json`.
+See [external task configuration](docs/external-tasks.md) for inputs, network and
+timing policies, and offline proof review. Historical pilot configurations and
+results remain outside this branch.
